@@ -1,15 +1,58 @@
+import { type MouseEvent, useEffect, useState } from 'react'
+import { portfolioApi, userApi, type PortfolioListItem, type UserProfile } from '../../../services/api'
+import {
+  getInitial,
+  toModifyPortfolioHash,
+  toSelectedPortfolioHash,
+} from '../../../services/portfolioMapper'
 import DashboardHeader from '../../../widgets/header/DashboardHeader'
 
 const imgHeaderLogoMark =
   'https://www.figma.com/api/mcp/asset/1c395c8b-e9b5-4c97-a4b2-21fd12fb9ee1'
 
-const myPortfolios = [
-  ['AI 포트폴리오 분석 프로젝트', '참여자 4명', true],
-  ['AI 포트폴리오 분석 프로젝트', '참여자 4명', false],
-  ['AI 포트폴리오 분석 프로젝트', '참여자 4명', false],
-]
-
 function MyPage() {
+  const [errorMessage, setErrorMessage] = useState('')
+  const [myPortfolios, setMyPortfolios] = useState<PortfolioListItem[]>([])
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+
+  useEffect(() => {
+    const loadMyPage = async () => {
+      setErrorMessage('')
+
+      try {
+        const [profileData, portfolioData] = await Promise.all([
+          userApi.getMe(),
+          userApi.getMyPortfolios(),
+        ])
+        setProfile(profileData)
+        setMyPortfolios(portfolioData)
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error ? error.message : '마이페이지 정보를 불러오지 못했습니다.',
+        )
+      }
+    }
+
+    loadMyPage()
+  }, [])
+
+  const handleDelete = async (portfolioId: number) => {
+    try {
+      await portfolioApi.delete(portfolioId)
+      setMyPortfolios((current) =>
+        current.filter((portfolio) => portfolio.id !== portfolioId),
+      )
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : '포트폴리오 삭제에 실패했습니다.',
+      )
+    }
+  }
+
+  const stopCardNavigation = (event: MouseEvent) => {
+    event.stopPropagation()
+  }
+
   return (
     <main className="min-h-screen overflow-auto bg-[#f3f7fc]">
       <section
@@ -30,17 +73,19 @@ function MyPage() {
 
         <section className="absolute left-[48px] top-[184px] flex h-[188px] w-[1184px] items-center rounded-[18px] border border-[#c9d5e7] bg-white px-[48px] shadow-[0px_12px_22px_-14px_rgba(18,26,56,0.08)]">
           <div className="flex size-[92px] items-center justify-center rounded-full bg-[#2e569d] text-[30px] font-bold text-white">
-            J
+            {getInitial(profile?.name)}
           </div>
           <div className="ml-[32px]">
             <h2 className="text-[24px] font-bold leading-[32px] text-[#121a34]">
-              김진우
+              {profile?.name ?? '사용자'}
             </h2>
             <p className="mt-[8px] text-[14px] text-[#5c6a84]">
-              Student · 202312345 · 3학년
+              {profile
+                ? `${profile.userLevel} · ${profile.studentId} · ${profile.grade}학년`
+                : '프로필 정보를 불러오는 중입니다.'}
             </p>
             <p className="mt-[12px] text-[13px] font-semibold text-[#2e569d]">
-              github.com/jinwoo743
+              {profile?.githubLink ?? 'GitHub 링크 없음'}
             </p>
           </div>
           <a
@@ -58,33 +103,44 @@ function MyPage() {
         </div>
 
         <div className="absolute left-[48px] top-[494px] space-y-[24px]">
-          {myPortfolios.map(([title, participants, canDelete], index) => (
+          {errorMessage && (
+            <p className="w-[1184px] text-[13px] font-semibold text-[#c7252e]">
+              {errorMessage}
+            </p>
+          )}
+          {myPortfolios.map((portfolio) => (
             <article
-              className="flex h-[80px] w-[1184px] items-center rounded-[12px] border border-[#c9d5e7] bg-white px-[22px]"
-              key={`${title}-${index}`}
+              className="flex h-[80px] w-[1184px] cursor-pointer items-center rounded-[12px] border border-[#c9d5e7] bg-white px-[22px] transition hover:bg-[#f8fbff]"
+              key={portfolio.id}
+              onClick={() => toSelectedPortfolioHash(portfolio.id)}
             >
               <span className="w-[60px] text-[14px] font-bold text-[#c7252e]">
-                ♥ 42
+                ♥ {portfolio.likeCount}
               </span>
               <div>
                 <h3 className="text-[16px] font-semibold text-[#121a34]">
-                  {title}
+                  {portfolio.projectName}
                 </h3>
                 <p className="mt-[8px] text-[12px] text-[#5c6a84]">
-                  {participants}
+                  참여자 {portfolio.participantCount}명
                 </p>
               </div>
-              <a
+              <button
                 className="ml-auto flex h-[40px] w-[64px] items-center justify-center rounded-[8px] border border-[#2e569d] bg-white text-[13px] font-semibold text-[#2e569d]"
-                href="#portfolio-modify"
+                onClick={(event) => {
+                  stopCardNavigation(event)
+                  toModifyPortfolioHash(portfolio.id)
+                }}
+                type="button"
               >
                 수정
-              </a>
+              </button>
               <button
-                className={[
-                  'ml-[12px] h-[40px] w-[64px] rounded-[8px] text-[13px] font-semibold text-white',
-                  canDelete ? 'bg-[#b83232]' : 'bg-[#5c6a84] opacity-60',
-                ].join(' ')}
+                className="ml-[12px] h-[40px] w-[64px] rounded-[8px] bg-[#b83232] text-[13px] font-semibold text-white"
+                onClick={(event) => {
+                  stopCardNavigation(event)
+                  handleDelete(portfolio.id)
+                }}
                 type="button"
               >
                 삭제

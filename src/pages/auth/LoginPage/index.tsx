@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { type FormEvent, useState } from 'react'
+import { authApi } from '../../../services/api'
 
 const imgHeaderLogoMark =
   'https://www.figma.com/api/mcp/asset/078a6be5-34dd-4cf0-899c-c6ba59d19b9a'
@@ -8,7 +9,30 @@ const imgLoginHeroVerticalLine =
   'https://www.figma.com/api/mcp/asset/34e6a2e2-4127-471b-befb-27fa7c61f0fb'
 
 function LoginPage() {
+  const [portalId, setPortalId] = useState('')
+  const [password, setPassword] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
   const [isPasswordVisible, setIsPasswordVisible] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setErrorMessage('')
+    setIsSubmitting(true)
+
+    try {
+      const user = await authApi.login({ password, portalId })
+      window.location.hash = user.firstLogin ? 'signup' : 'main'
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : '아이디 또는 비밀번호가 올바르지 않습니다',
+      )
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   return (
     <main className="flex h-screen items-center justify-center overflow-hidden bg-[#f3f7fc]">
@@ -82,7 +106,10 @@ function LoginPage() {
           가천대 컴공 프로젝트 활동을 한 흐름으로 이어갑니다.
         </p>
 
-        <form className="absolute left-[704px] top-[190px] h-[548px] w-[440px] rounded-[20px] border border-[#c9d5e7] bg-white px-[48px] pt-[57px]">
+        <form
+          className="absolute left-[704px] top-[190px] h-[548px] w-[440px] rounded-[20px] border border-[#c9d5e7] bg-white px-[48px] pt-[57px]"
+          onSubmit={handleSubmit}
+        >
           <h2 className="text-[28px] font-bold leading-[36px] text-[#121a34]">
             로그인
           </h2>
@@ -100,7 +127,9 @@ function LoginPage() {
             className="mt-[9px] h-[44px] w-[344px] rounded-[8px] border border-[#c9d5e7] bg-white px-[14px] text-[13px] text-[#5c6a84] outline-none transition focus:border-[#2e569d]"
             id="login-id"
             placeholder="아이디"
-            type="email"
+            onChange={(event) => setPortalId(event.target.value)}
+            type="text"
+            value={portalId}
           />
 
           <label
@@ -114,7 +143,9 @@ function LoginPage() {
               className="h-full w-full rounded-[8px] border border-[#c9d5e7] bg-white px-[14px] pr-[46px] text-[13px] text-[#5c6a84] outline-none transition focus:border-[#2e569d]"
               id="login-password"
               placeholder="비밀번호"
+              onChange={(event) => setPassword(event.target.value)}
               type={isPasswordVisible ? 'text' : 'password'}
+              value={password}
             />
             <button
               aria-label={
@@ -128,12 +159,19 @@ function LoginPage() {
             </button>
           </div>
 
-          <a
+          {errorMessage && (
+            <p className="mt-[14px] text-[12px] font-semibold text-[#c7252e]">
+              {errorMessage}
+            </p>
+          )}
+
+          <button
             className="mt-[45px] flex h-[40px] w-[344px] items-center justify-center rounded-[8px] bg-[#e2842a] text-[13px] font-semibold text-white transition hover:bg-[#cf761f]"
-            href="#main"
+            disabled={isSubmitting}
+            type="submit"
           >
-            로그인
-          </a>
+            {isSubmitting ? '로그인 중...' : '로그인'}
+          </button>
           <a
             className="mt-[24px] block h-[24px] w-[344px] text-center text-[13px] font-semibold leading-[24px] text-[#2e569d]"
             href="#signup"

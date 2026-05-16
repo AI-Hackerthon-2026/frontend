@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { portfolioApi, type PortfolioListItem } from '../../../services/api'
+import {
+  categoryLabels,
+  categoryValues,
+  formatDateRange,
+  formatSkills,
+  toSelectedPortfolioHash,
+} from '../../../services/portfolioMapper'
 import DashboardHeader from '../../../widgets/header/DashboardHeader'
 
 const imgHeaderLogoMark =
@@ -9,142 +17,53 @@ const pageSize = 5
 
 type Category = (typeof categories)[number]
 
-interface Portfolio {
-  category: Exclude<Category, '전체'>
-  deploymentUrl: string
-  duration: string
-  githubUrl: string
-  id: number
-  likes: number
-  participants: string
-  stack: string[]
-  summary: string
-  title: string
-}
-
-const portfolios: Portfolio[] = [
-  {
-    category: '졸업',
-    deploymentUrl: 'https://review-helper.vercel.app',
-    duration: '2026.03 - 2026.06',
-    githubUrl: 'https://github.com/team/review-helper',
-    id: 1,
-    likes: 42,
-    participants: '참여 인원 4명',
-    stack: ['React', 'Spring', 'GPT API'],
-    summary: 'GitHub PR을 분석하고 리뷰 코멘트를 생성하는 학과 프로젝트입니다.',
-    title: 'AI 코드 리뷰 도우미',
-  },
-  {
-    category: 'P-프로젝트',
-    deploymentUrl: 'https://study-match.vercel.app',
-    duration: '2026.03 - 2026.05',
-    githubUrl: 'https://github.com/team/study-match',
-    id: 2,
-    likes: 35,
-    participants: '참여 인원 3명',
-    stack: ['Next.js', 'Prisma'],
-    summary: '관심 분야와 시간표 기반으로 스터디 팀을 연결합니다.',
-    title: '캠퍼스 스터디 매칭',
-  },
-  {
-    category: '자율',
-    deploymentUrl: 'https://algorun.vercel.app',
-    duration: '2026.04 - 2026.06',
-    githubUrl: 'https://github.com/team/algorun',
-    id: 3,
-    likes: 28,
-    participants: '참여 인원 4명',
-    stack: ['Vue', 'Node.js'],
-    summary: '문제 풀이 기록과 랭킹으로 학습 동기를 만드는 서비스입니다.',
-    title: '알고리즘 배틀 플랫폼',
-  },
-  {
-    category: 'P-프로젝트',
-    deploymentUrl: 'https://club-check.app',
-    duration: '2026.03 - 2026.04',
-    githubUrl: 'https://github.com/team/club-check',
-    id: 4,
-    likes: 19,
-    participants: '참여 인원 2명',
-    stack: ['Flutter', 'Firebase'],
-    summary: '동아리 활동 출석과 공지 확인을 모바일로 관리합니다.',
-    title: '동아리 출석 관리',
-  },
-  {
-    category: '자율',
-    deploymentUrl: 'https://kernel-log.vercel.app',
-    duration: '2026.03 - 2026.06',
-    githubUrl: 'https://github.com/team/kernel-log',
-    id: 5,
-    likes: 17,
-    participants: '참여 인원 3명',
-    stack: ['C', 'Linux'],
-    summary: '주차별 학습 기록과 발표 자료를 공유하는 포트폴리오입니다.',
-    title: '운영체제 스터디 로그',
-  },
-  {
-    category: '졸업',
-    deploymentUrl: 'https://mealping.vercel.app',
-    duration: '2026.02 - 2026.06',
-    githubUrl: 'https://github.com/team/mealping',
-    id: 6,
-    likes: 15,
-    participants: '참여 인원 2명',
-    stack: ['Python', 'Discord'],
-    summary: '학식 메뉴와 알림을 자동으로 전달하는 챗봇 프로젝트입니다.',
-    title: '학식 알림 봇',
-  },
-  {
-    category: '자율',
-    deploymentUrl: 'https://roomie.vercel.app',
-    duration: '2026.05 - 2026.06',
-    githubUrl: 'https://github.com/team/roomie',
-    id: 7,
-    likes: 11,
-    participants: '참여 인원 2명',
-    stack: ['Next.js', 'Supabase'],
-    summary: '빈 강의실 검색과 예약 흐름을 단순화하는 웹 서비스입니다.',
-    title: '강의실 예약 도우미',
-  },
-]
-
 function PortfolioBoardPage() {
   const [activeCategory, setActiveCategory] = useState<Category>('전체')
   const [currentPage, setCurrentPage] = useState(1)
-  const [selectedId, setSelectedId] = useState(portfolios[0].id)
-
-  const filteredPortfolios = useMemo(() => {
-    if (activeCategory === '전체') {
-      return portfolios
-    }
-
-    return portfolios.filter((portfolio) => portfolio.category === activeCategory)
-  }, [activeCategory])
-
-  const pageCount = Math.max(1, Math.ceil(filteredPortfolios.length / pageSize))
-  const paginatedPortfolios = filteredPortfolios.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize,
-  )
+  const [errorMessage, setErrorMessage] = useState('')
+  const [pageCount, setPageCount] = useState(1)
+  const [portfolios, setPortfolios] = useState<PortfolioListItem[]>([])
+  const [selectedId, setSelectedId] = useState(0)
   const selectedPortfolio =
-    filteredPortfolios.find((portfolio) => portfolio.id === selectedId) ??
-    filteredPortfolios[0]
+    portfolios.find((portfolio) => portfolio.id === selectedId) ?? portfolios[0]
 
   useEffect(() => {
-    setCurrentPage(1)
-    setSelectedId(filteredPortfolios[0]?.id ?? 0)
-  }, [filteredPortfolios])
+    const loadPortfolios = async () => {
+      setErrorMessage('')
+
+      try {
+        const data = await portfolioApi.getList({
+          category: categoryValues[activeCategory],
+          page: currentPage - 1,
+          size: pageSize,
+          sort: 'LATEST',
+        })
+
+        setPortfolios(data.content)
+        setPageCount(Math.max(1, data.totalPages))
+        setSelectedId(data.content[0]?.id ?? 0)
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : '포트폴리오 목록을 불러오지 못했습니다.',
+        )
+        setPortfolios([])
+        setPageCount(1)
+        setSelectedId(0)
+      }
+    }
+
+    loadPortfolios()
+  }, [activeCategory, currentPage])
 
   const handleCategoryClick = (category: Category) => {
     setActiveCategory(category)
+    setCurrentPage(1)
   }
 
   const handlePageClick = (page: number) => {
     setCurrentPage(page)
-    setSelectedId(
-      filteredPortfolios[(page - 1) * pageSize]?.id ?? filteredPortfolios[0]?.id ?? 0,
-    )
   }
 
   return (
@@ -205,7 +124,7 @@ function PortfolioBoardPage() {
             <span className="text-center">공감</span>
           </div>
 
-          {paginatedPortfolios.map((portfolio) => {
+          {portfolios.map((portfolio) => {
             const isSelected = selectedPortfolio?.id === portfolio.id
 
             return (
@@ -219,7 +138,7 @@ function PortfolioBoardPage() {
                 key={portfolio.id}
                 onClick={() => setSelectedId(portfolio.id)}
                 onDoubleClick={() => {
-                  window.location.hash = 'portfolio-detail'
+                  toSelectedPortfolioHash(portfolio.id)
                 }}
                 type="button"
               >
@@ -228,28 +147,28 @@ function PortfolioBoardPage() {
                 </div>
                 <div className="min-w-0">
                   <h3 className="truncate text-[15px] font-semibold text-[#102047]">
-                    {portfolio.title}
+                    {portfolio.projectName}
                   </h3>
                   <p className="mt-[6px] truncate text-[12px] text-[#61708a]">
                     {portfolio.summary}
                   </p>
                 </div>
                 <span className="mx-auto flex h-[28px] min-w-[74px] items-center justify-center rounded-[14px] border border-[#d4e1f2] bg-[#f3f7fc] px-[12px] text-[11px] font-semibold text-[#2e569d]">
-                  {portfolio.category}
+                  {categoryLabels[portfolio.category]}
                 </span>
                 <span className="truncate text-center text-[12px] text-[#304f9a]">
-                  {portfolio.stack.join(' · ')}
+                  {formatSkills(portfolio.skills)}
                 </span>
                 <span className="text-center text-[13px] font-semibold text-[#b83a3a]">
-                  ♥ {portfolio.likes}
+                  ♥ {portfolio.likeCount}
                 </span>
               </button>
             )
           })}
 
-          {paginatedPortfolios.length === 0 && (
+          {portfolios.length === 0 && (
             <div className="flex h-[380px] items-center justify-center text-[13px] text-[#61708a]">
-              해당 카테고리의 포트폴리오가 없습니다.
+              {errorMessage || '해당 카테고리의 포트폴리오가 없습니다.'}
             </div>
           )}
         </section>
@@ -295,20 +214,20 @@ function PortfolioBoardPage() {
             </div>
             <div className="mt-[26px] flex items-start justify-between">
               <h2 className="text-[22px] font-semibold leading-[32px] text-[#121a34]">
-                {selectedPortfolio.title}
+                {selectedPortfolio.projectName}
               </h2>
               <span className="text-[16px] font-semibold text-[#c7252e]">
-                ♥ {selectedPortfolio.likes}
+                ♥ {selectedPortfolio.likeCount}
               </span>
             </div>
             <p className="mt-[10px] w-[340px] text-[13px] leading-[19px] text-[#5c6a84]">
               {selectedPortfolio.summary}
             </p>
             <p className="mt-[18px] text-[12px] text-[#5c6a84]">
-              {selectedPortfolio.participants}
+              참여 인원 {selectedPortfolio.participantCount}명
             </p>
             <div className="mt-[24px] flex flex-wrap gap-[10px]">
-              {selectedPortfolio.stack.map((tag) => (
+              {selectedPortfolio.skills.map((tag) => (
                 <span
                   className="flex h-[28px] items-center rounded-[14px] border border-[#c9d5e7] bg-[#e7f0fa] px-[17px] text-[12px] font-medium text-[#2e569d]"
                   key={tag}
@@ -318,15 +237,25 @@ function PortfolioBoardPage() {
               ))}
             </div>
             <div className="mt-[40px] flex gap-[24px]">
-              <button className="h-[40px] w-[180px] rounded-[8px] border border-[#c9d5e7] bg-white text-[13px] font-semibold text-[#2e569d]">
+              <a
+                className="flex h-[40px] w-[180px] items-center justify-center rounded-[8px] border border-[#c9d5e7] bg-white text-[13px] font-semibold text-[#2e569d]"
+                href={selectedPortfolio.githubLink ?? '#portfolio'}
+                rel="noreferrer"
+                target={selectedPortfolio.githubLink ? '_blank' : undefined}
+              >
                 GitHub
-              </button>
-              <button className="h-[40px] w-[180px] rounded-[8px] border border-[#c9d5e7] bg-white text-[13px] font-semibold text-[#2e569d]">
+              </a>
+              <a
+                className="flex h-[40px] w-[180px] items-center justify-center rounded-[8px] border border-[#c9d5e7] bg-white text-[13px] font-semibold text-[#2e569d]"
+                href={selectedPortfolio.deploymentLink ?? '#portfolio'}
+                rel="noreferrer"
+                target={selectedPortfolio.deploymentLink ? '_blank' : undefined}
+              >
                 배포 링크
-              </button>
+              </a>
             </div>
             <p className="mt-[28px] text-[13px] text-[#61708a]">
-              개발 기간 {selectedPortfolio.duration}
+              개발 기간 {formatDateRange(selectedPortfolio.startDate, selectedPortfolio.endDate)}
             </p>
           </aside>
         )}
