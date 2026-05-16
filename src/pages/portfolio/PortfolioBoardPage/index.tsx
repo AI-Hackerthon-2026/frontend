@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { portfolioApi, type PortfolioListItem } from '../../../services/api'
 import {
   categoryLabels,
@@ -14,18 +14,51 @@ const imgHeaderLogoMark =
 
 const categories = ['전체', '졸업', 'P-프로젝트', '자율'] as const
 const pageSize = 5
+const searchFetchSize = 1000
 
 type Category = (typeof categories)[number]
+
+interface SearchablePortfolio extends PortfolioListItem {
+  participantNames: string[]
+}
 
 function PortfolioBoardPage() {
   const [activeCategory, setActiveCategory] = useState<Category>('전체')
   const [currentPage, setCurrentPage] = useState(1)
   const [errorMessage, setErrorMessage] = useState('')
-  const [pageCount, setPageCount] = useState(1)
-  const [portfolios, setPortfolios] = useState<PortfolioListItem[]>([])
+  const [portfolios, setPortfolios] = useState<SearchablePortfolio[]>([])
+  const [searchKeyword, setSearchKeyword] = useState('')
   const [selectedId, setSelectedId] = useState(0)
+  const filteredPortfolios = useMemo(() => {
+    const keyword = searchKeyword.trim().toLowerCase()
+
+    if (!keyword) {
+      return portfolios
+    }
+
+    return portfolios.filter((portfolio) => {
+      const projectName = portfolio.projectName.toLowerCase()
+      const authorName = portfolio.authorName.toLowerCase()
+      const participantNames = portfolio.participantNames
+        .join(' ')
+        .toLowerCase()
+
+      return (
+        projectName.includes(keyword) ||
+        authorName.includes(keyword) ||
+        participantNames.includes(keyword)
+      )
+    })
+  }, [portfolios, searchKeyword])
+  const pageCount = Math.max(1, Math.ceil(filteredPortfolios.length / pageSize))
+  const paginatedPortfolios = filteredPortfolios.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  )
   const selectedPortfolio =
-    portfolios.find((portfolio) => portfolio.id === selectedId) ?? portfolios[0]
+    paginatedPortfolios.find((portfolio) => portfolio.id === selectedId) ??
+    paginatedPortfolios[0] ??
+    filteredPortfolios[0]
 
   useEffect(() => {
     const loadPortfolios = async () => {
@@ -34,14 +67,33 @@ function PortfolioBoardPage() {
       try {
         const data = await portfolioApi.getList({
           category: categoryValues[activeCategory],
-          page: currentPage - 1,
-          size: pageSize,
+          page: 0,
+          size: searchFetchSize,
           sort: 'LATEST',
         })
 
-        setPortfolios(data.content)
-        setPageCount(Math.max(1, data.totalPages))
-        setSelectedId(data.content[0]?.id ?? 0)
+        const searchablePortfolios = await Promise.all(
+          data.content.map(async (portfolio) => {
+            try {
+              const detail = await portfolioApi.getDetail(portfolio.id)
+
+              return {
+                ...portfolio,
+                participantNames: detail.participants.map(
+                  (participant) => participant.name,
+                ),
+              }
+            } catch {
+              return {
+                ...portfolio,
+                participantNames: [],
+              }
+            }
+          }),
+        )
+
+        setPortfolios(searchablePortfolios)
+        setSelectedId(searchablePortfolios[0]?.id ?? 0)
       } catch (error) {
         setErrorMessage(
           error instanceof Error
@@ -49,21 +101,27 @@ function PortfolioBoardPage() {
             : '포트폴리오 목록을 불러오지 못했습니다.',
         )
         setPortfolios([])
-        setPageCount(1)
         setSelectedId(0)
       }
     }
 
     loadPortfolios()
-  }, [activeCategory, currentPage])
+  }, [activeCategory])
 
   const handleCategoryClick = (category: Category) => {
     setActiveCategory(category)
     setCurrentPage(1)
+    setSelectedId(0)
   }
 
   const handlePageClick = (page: number) => {
     setCurrentPage(page)
+  }
+
+  const handleSearchChange = (value: string) => {
+    setSearchKeyword(value)
+    setCurrentPage(1)
+    setSelectedId(0)
   }
 
   return (
@@ -107,6 +165,18 @@ function PortfolioBoardPage() {
               )
             })}
           </div>
+          <label className="ml-[28px] flex h-[40px] w-[360px] items-center rounded-[8px] border border-[#c9d5e7] bg-[#f9fbfd] px-[14px]">
+            <span className="mr-[10px] text-[13px] font-semibold text-[#2e569d]">
+              검색
+            </span>
+            <input
+              className="h-full flex-1 bg-transparent text-[13px] text-[#5c6a84] outline-none placeholder:text-[#9ca8ba]"
+              onChange={(event) => handleSearchChange(event.target.value)}
+              placeholder="프로젝트명 또는 작성자명"
+              type="search"
+              value={searchKeyword}
+            />
+          </label>
           <a
             className="ml-auto flex h-[40px] w-[146px] items-center justify-center rounded-[8px] bg-[#e2842a] text-[13px] font-semibold text-white"
             href="#portfolio-create"
@@ -124,7 +194,7 @@ function PortfolioBoardPage() {
             <span className="text-center">공감</span>
           </div>
 
-          {portfolios.map((portfolio) => {
+          {paginatedPortfolios.map((portfolio) => {
             const isSelected = selectedPortfolio?.id === portfolio.id
 
             return (
@@ -166,9 +236,12 @@ function PortfolioBoardPage() {
             )
           })}
 
-          {portfolios.length === 0 && (
+          {paginatedPortfolios.length === 0 && (
             <div className="flex h-[380px] items-center justify-center text-[13px] text-[#61708a]">
-              {errorMessage || '해당 카테고리의 포트폴리오가 없습니다.'}
+              {errorMessage ||
+                (searchKeyword
+                  ? '검색 결과가 없습니다.'
+                  : '해당 카테고리의 포트폴리오가 없습니다.')}
             </div>
           )}
         </section>

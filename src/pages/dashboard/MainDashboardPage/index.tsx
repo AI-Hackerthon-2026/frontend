@@ -1,16 +1,49 @@
 import { useCallback, useEffect, useState } from 'react'
-import { portfolioApi, type PortfolioListItem, type TopPortfolio } from '../../../services/api'
-import { formatSkills, splitSummary, toSelectedPortfolioHash } from '../../../services/portfolioMapper'
+import {
+  portfolioApi,
+  type PortfolioListItem,
+  type RankingPeriod,
+} from '../../../services/api'
+import {
+  formatSkills,
+  rankPortfolios,
+  splitSummary,
+  toSelectedPortfolioHash,
+} from '../../../services/portfolioMapper'
 import DashboardHeader from '../../../widgets/header/DashboardHeader'
 
 const imgHeaderLogoMark =
   'https://www.figma.com/api/mcp/asset/32ce995a-f29b-4ccb-b7d3-03a243641f94'
 
-const termOrder = ['CURRENT_SEMESTER', 'LAST_SEMESTER', 'ALL_TIME'] as const
+const termOrder = ['ALL_TIME', 'CURRENT_SEMESTER', 'LAST_SEMESTER'] as const
 const termLabels = {
-  ALL_TIME: '전체 1위 포트폴리오',
-  CURRENT_SEMESTER: '이번 학기 1위 포트폴리오',
-  LAST_SEMESTER: '저번 학기 1위 포트폴리오',
+  ALL_TIME: '전체',
+  CURRENT_SEMESTER: '이번 학기',
+  LAST_SEMESTER: '저번 학기',
+}
+const slideRankStyles = {
+  1: {
+    accent: 'bg-[#ffc32f]',
+    badge: 'bg-[#ffc32f] text-[#121a34]',
+    like: 'bg-[#2e569d]',
+  },
+  2: {
+    accent: 'bg-[#c7d6eb]',
+    badge: 'bg-[#edf4fd] text-[#2e569d]',
+    like: 'bg-[#40589e]',
+  },
+  3: {
+    accent: 'bg-[#e2842a]',
+    badge: 'bg-[#fff1e3] text-[#b96624]',
+    like: 'bg-[#b96624]',
+  },
+} as const
+
+interface DashboardSlide extends PortfolioListItem {
+  period: RankingPeriod
+  periodLabel: string
+  rank: number
+  rankLabel: string
 }
 
 function MainDashboardPage() {
@@ -18,10 +51,13 @@ function MainDashboardPage() {
   const [popularPortfolios, setPopularPortfolios] = useState<PortfolioListItem[]>([])
   const [recentPortfolios, setRecentPortfolios] = useState<PortfolioListItem[]>([])
   const [slideIndex, setSlideIndex] = useState(0)
-  const [slides, setSlides] = useState<TopPortfolio[]>([])
-  const [term, setTerm] = useState<(typeof termOrder)[number]>('CURRENT_SEMESTER')
+  const [slides, setSlides] = useState<DashboardSlide[]>([])
+  const [term, setTerm] = useState<(typeof termOrder)[number]>('ALL_TIME')
 
   const currentSlide = slides[slideIndex]
+  const currentSlideStyle =
+    slideRankStyles[(currentSlide?.rank ?? 1) as keyof typeof slideRankStyles] ??
+    slideRankStyles[1]
   const [slideDescription, slideDescription2] = splitSummary(
     currentSlide?.summary ?? '등록된 1위 포트폴리오가 없습니다.',
   )
@@ -78,20 +114,31 @@ function MainDashboardPage() {
 
       try {
         const [topData, popularData, recentData] = await Promise.all([
-          portfolioApi.getTop(),
+          Promise.all(
+            termOrder.map(async (period) => {
+              const rankings = await portfolioApi.getRanking(period)
+
+              return rankPortfolios(rankings)
+                .slice(0, 3)
+                .map(({ portfolio, rank, rankLabel }) => ({
+                  ...portfolio,
+                  period,
+                  periodLabel: termLabels[period],
+                  rank,
+                  rankLabel,
+                }))
+            }),
+          ),
           portfolioApi.getPopular(),
           portfolioApi.getList({ page: 0, size: 6, sort: 'LATEST' }),
         ])
-        const orderedSlides = [...topData].sort(
-          (first, second) =>
-            termOrder.indexOf(first.period) - termOrder.indexOf(second.period),
-        )
+        const orderedSlides = topData.flat()
 
         setSlides(orderedSlides)
         setPopularPortfolios(popularData)
         setRecentPortfolios(recentData.content)
         setSlideIndex(0)
-        setTerm(orderedSlides[0]?.period ?? 'CURRENT_SEMESTER')
+        setTerm(orderedSlides[0]?.period ?? 'ALL_TIME')
       } catch (error) {
         setErrorMessage(
           error instanceof Error
@@ -136,6 +183,17 @@ function MainDashboardPage() {
 
           <div className="absolute left-[36px] top-[31px] flex gap-[12px]">
             <button
+              onClick={() => handleTermChange('ALL_TIME')}
+              className={[
+                'px-[16px] py-[6px] rounded-[6px] text-[12px] font-semibold transition-all',
+                term === 'ALL_TIME'
+                  ? 'bg-white text-[#253e86]'
+                  : 'bg-[rgba(255,255,255,0.2)] text-white hover:bg-[rgba(255,255,255,0.3)]',
+              ].join(' ')}
+            >
+              전체
+            </button>
+            <button
               onClick={() => handleTermChange('CURRENT_SEMESTER')}
               className={[
                 'px-[16px] py-[6px] rounded-[6px] text-[12px] font-semibold transition-all',
@@ -157,27 +215,29 @@ function MainDashboardPage() {
             >
               저번학기
             </button>
-            <button
-              onClick={() => handleTermChange('ALL_TIME')}
-              className={[
-                'px-[16px] py-[6px] rounded-[6px] text-[12px] font-semibold transition-all',
-                term === 'ALL_TIME'
-                  ? 'bg-white text-[#253e86]'
-                  : 'bg-[rgba(255,255,255,0.2)] text-white hover:bg-[rgba(255,255,255,0.3)]',
-              ].join(' ')}
-            >
-              전체
-            </button>
           </div>
 
           <p className="absolute left-[36px] top-[112px] text-[22px] font-bold leading-[34px] text-[#62b7e6]">
-            {termLabels[term]}
+            {currentSlide
+              ? `${currentSlide.periodLabel} ${currentSlide.rankLabel} 포트폴리오`
+              : `${termLabels[term]} 포트폴리오`}
           </p>
-          <h2 className="absolute left-[36px] top-[164px] text-[54px] font-bold leading-[74px] text-white">
+          <h2
+            className="absolute left-[36px] top-[164px] text-[54px] font-bold leading-[74px] text-white animate-dashboard-slide"
+            key={`title-${currentSlide?.id ?? 'empty'}-${slideIndex}`}
+          >
             {currentSlide?.projectName ?? '포트폴리오 준비 중'}
           </h2>
-          <div className="absolute left-[40px] top-[238px] h-[8px] w-[348px] rounded-[4px] bg-[#ffc32f]" />
-          <p className="absolute left-[40px] top-[270px] w-[560px] text-[18px] font-medium leading-[32px] text-white">
+          <div
+            className={[
+              'absolute left-[40px] top-[238px] h-[8px] w-[348px] rounded-[4px]',
+              currentSlideStyle.accent,
+            ].join(' ')}
+          />
+          <p
+            className="absolute left-[40px] top-[270px] w-[560px] text-[18px] font-medium leading-[32px] text-white animate-dashboard-slide"
+            key={`summary-${currentSlide?.id ?? 'empty'}-${slideIndex}`}
+          >
             {slideDescription}
             <br />
             {slideDescription2}
@@ -190,12 +250,20 @@ function MainDashboardPage() {
             포트폴리오 상세 보기
           </button>
 
-          <div className="absolute left-[655px] top-[58px] h-[318px] w-[360px] rounded-[22px] bg-[rgba(255,255,255,0.96)] shadow-[0px_24px_36px_-18px_rgba(5,10,31,0.3)]">
+          <div
+            className="absolute left-[655px] top-[58px] h-[318px] w-[360px] rounded-[22px] bg-[rgba(255,255,255,0.96)] shadow-[0px_24px_36px_-18px_rgba(5,10,31,0.3)] animate-dashboard-slide"
+            key={`card-${currentSlide?.id ?? 'empty'}-${slideIndex}`}
+          >
             <div className="absolute left-[28px] top-[28px] flex h-[138px] w-[304px] items-center justify-center rounded-[16px] border border-[#c9d5e7] bg-[#e7f0fa] text-[15px] font-bold text-[#2e569d]">
               PROJECT PREVIEW
             </div>
-            <div className="absolute -left-[8px] -top-[8px] flex size-[58px] items-center justify-center rounded-full border border-white bg-[#ffc32f] text-[25px] font-bold text-[#121a34]">
-              ♛
+            <div
+              className={[
+                'absolute -left-[8px] -top-[8px] flex size-[58px] items-center justify-center rounded-full border border-white text-[13px] font-bold',
+                currentSlideStyle.badge,
+              ].join(' ')}
+            >
+              {currentSlide?.rankLabel ?? 'TOP'}
             </div>
             <p className="absolute left-[28px] top-[204px] text-[20px] font-bold leading-[28px] text-[#121a34]">
               {currentSlide?.projectName ?? '데이터 없음'}
@@ -205,7 +273,12 @@ function MainDashboardPage() {
                 ? `${currentSlide.authorName} · ${formatSkills(currentSlide.skills)}`
                 : 'API 데이터를 기다리는 중입니다.'}
             </p>
-            <div className="absolute left-[28px] top-[269px] flex h-[34px] w-[92px] items-center justify-center rounded-[17px] bg-[#2e569d] text-[14px] font-bold text-white">
+            <div
+              className={[
+                'absolute left-[28px] top-[269px] flex h-[34px] w-[92px] items-center justify-center rounded-[17px] text-[14px] font-bold text-white',
+                currentSlideStyle.like,
+              ].join(' ')}
+            >
               ♥ {currentSlide?.likeCount ?? 0}
             </div>
           </div>

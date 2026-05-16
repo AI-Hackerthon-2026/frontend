@@ -1,7 +1,7 @@
 import type {
   PortfolioCategory,
-  PortfolioDetail,
   PortfolioListItem,
+  PortfolioDetail,
   RankingPeriod,
   TopPortfolio,
   UserLevel,
@@ -103,4 +103,49 @@ export function detailToSaveFields(portfolio: PortfolioDetail) {
     summary: portfolio.summary,
     thumbnailUrl: portfolio.thumbnailUrl ?? '',
   }
+}
+
+export interface RankedPortfolio {
+  isTied: boolean
+  portfolio: PortfolioListItem
+  rank: number
+  rankLabel: string
+}
+
+export function rankPortfolios(portfolios: PortfolioListItem[]) {
+  const sortedPortfolios = [...portfolios].sort(
+    (first, second) => second.likeCount - first.likeCount,
+  )
+  const rankCounts = new Map<number, number>()
+  const rankedPortfolios: RankedPortfolio[] = []
+
+  sortedPortfolios.forEach((portfolio, index) => {
+    const previousPortfolio = sortedPortfolios[index - 1]
+    const previousRank = rankedPortfolios[index - 1]?.rank ?? 0
+    const rank =
+      previousPortfolio?.likeCount === portfolio.likeCount
+        ? previousRank
+        : previousRank + 1
+
+    rankCounts.set(rank, (rankCounts.get(rank) ?? 0) + 1)
+
+    rankedPortfolios.push({
+      isTied: false,
+      portfolio,
+      rank,
+      rankLabel: `${rank}위`,
+    })
+  })
+
+  return rankedPortfolios.map((rankedPortfolio) => {
+    const isTied = (rankCounts.get(rankedPortfolio.rank) ?? 0) > 1
+
+    return {
+      ...rankedPortfolio,
+      isTied,
+      rankLabel: isTied
+        ? `공동 ${rankedPortfolio.rank}위`
+        : `${rankedPortfolio.rank}위`,
+    }
+  })
 }

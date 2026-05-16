@@ -14,12 +14,25 @@ const imgHeaderLogoMark =
 
 function PortfolioDetailPage() {
   const [errorMessage, setErrorMessage] = useState('')
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [portfolio, setPortfolio] = useState<PortfolioDetail | null>(null)
   const portfolioId = getSelectedPortfolioId()
   const shouldAnimateTitle = (portfolio?.projectName.length ?? 0) > 14
   const renderedMarkdown = useMemo(
     () => renderMarkdown(portfolio?.description ?? ''),
     [portfolio?.description],
+  )
+  const orderedParticipants = useMemo(
+    () =>
+      [...(portfolio?.participants ?? [])].sort((first, second) => {
+        if (first.owner === second.owner) {
+          return 0
+        }
+
+        return first.owner ? -1 : 1
+      }),
+    [portfolio?.participants],
   )
 
   useEffect(() => {
@@ -46,6 +59,8 @@ function PortfolioDetailPage() {
       return
     }
 
+    setIsDeleting(true)
+
     try {
       await portfolioApi.delete(portfolio.id)
       window.location.hash = 'portfolio'
@@ -53,6 +68,9 @@ function PortfolioDetailPage() {
       setErrorMessage(
         error instanceof Error ? error.message : '포트폴리오 삭제에 실패했습니다.',
       )
+      setIsDeleteModalOpen(false)
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -104,7 +122,7 @@ function PortfolioDetailPage() {
         {portfolio?.owner && (
           <button
             className="absolute left-[1138px] top-[108px] h-[40px] w-[72px] rounded-[8px] border border-[#b83232] bg-[#c23b3b] text-[13px] font-semibold text-white shadow-[0px_8px_16px_-8px_rgba(194,59,59,0.18)]"
-            onClick={handleDelete}
+            onClick={() => setIsDeleteModalOpen(true)}
             type="button"
           >
             삭제
@@ -195,7 +213,7 @@ function PortfolioDetailPage() {
               작성자 / 참여자
             </h2>
             <span className="flex h-[28px] w-[112px] items-center justify-center rounded-[14px] border border-[#c9d9ee] bg-[#edf4fd] text-[12px] font-semibold text-[#2e569d]">
-              총 {portfolio?.participants.length ?? 0}명
+              총 {orderedParticipants.length}명
             </span>
           </div>
           <p className="mt-[12px] text-[13px] text-[#5c6a84]">
@@ -204,11 +222,11 @@ function PortfolioDetailPage() {
 
           <div className="mt-[14px] h-[124px] overflow-y-auto pr-[10px] [scrollbar-color:#7ea2f3_#e6eef8] [scrollbar-width:thin]">
             <div className="space-y-[8px]">
-              {(portfolio?.participants ?? []).map((participant, index) => (
+              {orderedParticipants.map((participant) => (
                 <div
                   className={[
                     'flex h-[34px] w-[300px] items-center rounded-[10px] px-[10px]',
-                    index === 0
+                    participant.owner
                       ? 'border-[1.5px] border-[#5f99f5] bg-[#f7fbff]'
                       : 'border border-[#dde7f3] bg-white',
                   ].join(' ')}
@@ -217,7 +235,7 @@ function PortfolioDetailPage() {
                   <span
                     className={[
                       'flex size-[22px] shrink-0 items-center justify-center rounded-full text-[10px] font-semibold',
-                      index === 0
+                      participant.owner
                         ? 'bg-[#2e569d] text-white'
                         : 'border border-[#c9d9ee] bg-[#edf4fd] text-[#2e569d]',
                     ].join(' ')}
@@ -244,6 +262,46 @@ function PortfolioDetailPage() {
               : '상세 설명이 없습니다.'}
           </div>
         </section>
+
+        {isDeleteModalOpen && portfolio && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#121a34]/45 px-[24px]">
+            <section
+              aria-modal="true"
+              className="w-[392px] rounded-[18px] border border-[#d8e2f0] bg-white px-[28px] py-[26px] shadow-[0px_24px_54px_-20px_rgba(18,26,52,0.45)]"
+              role="dialog"
+            >
+              <div className="mx-auto flex size-[48px] items-center justify-center rounded-full bg-[#fff1f1] text-[22px] font-bold text-[#c23b3b]">
+                !
+              </div>
+              <h2 className="mt-[18px] text-center text-[20px] font-bold leading-[30px] text-[#121a34]">
+                삭제하시겠습니까?
+              </h2>
+              <p className="mt-[10px] text-center text-[13px] leading-[21px] text-[#5c6a84]">
+                {portfolio.projectName} 포트폴리오가 삭제됩니다.
+                <br />
+                삭제 후 목록과 랭킹에서 더 이상 보이지 않습니다.
+              </p>
+              <div className="mt-[24px] flex gap-[10px]">
+                <button
+                  className="h-[42px] flex-1 rounded-[8px] border border-[#c9d5e7] bg-white text-[13px] font-semibold text-[#2e569d] hover:bg-[#f3f7fc]"
+                  disabled={isDeleting}
+                  onClick={() => setIsDeleteModalOpen(false)}
+                  type="button"
+                >
+                  취소
+                </button>
+                <button
+                  className="h-[42px] flex-1 rounded-[8px] bg-[#c23b3b] text-[13px] font-semibold text-white shadow-[0px_8px_16px_-8px_rgba(194,59,59,0.35)] disabled:bg-[#d89a9a]"
+                  disabled={isDeleting}
+                  onClick={handleDelete}
+                  type="button"
+                >
+                  {isDeleting ? '삭제 중' : '삭제'}
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
       </section>
     </main>
   )
