@@ -186,6 +186,7 @@ function buildQuery(params: Record<string, string | number | undefined>) {
 export const authApi = {
   login: (body: LoginRequest) =>
     request<AuthUser>('/api/auth/login', { method: 'POST', body }),
+  logout: () => request<null>('/api/auth/logout', { method: 'POST' }),
   register: (body: RegisterRequest) =>
     request<AuthUser>('/api/auth/register', { method: 'POST', body }),
 }
@@ -239,4 +240,19 @@ export const imageApi = {
       body: formData,
     })
   },
+}
+
+export function resolveApiAssetUrl(url?: string | null) {
+  if (!url) {
+    return ''
+  }
+
+  if (/^(https?:|data:|blob:)/i.test(url)) {
+    return url
+  }
+
+  const normalizedBaseUrl = API_BASE_URL.replace(/\/$/, '')
+  const normalizedUrl = url.startsWith('/') ? url : `/${url}`
+
+  return `${normalizedBaseUrl}${normalizedUrl}`
 }

@@ -21,6 +21,11 @@ body {
   margin: 0;
 }
 
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
 #root {
   min-height: 100vh;
 }
@@ -57,4 +62,17 @@ body {
 
 .animate-dashboard-slide {
   animation: dashboard-slide 420ms ease-out both;
+}
+
+@keyframes dashboard-progress {
+  0% {
+    transform: scaleX(0);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+.animate-dashboard-progress {
+  animation: dashboard-progress linear forwards;
 }

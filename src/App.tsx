@@ -9,21 +9,52 @@ import PortfolioModifyPage from './pages/portfolio/PortfolioModifyPage'
 import RankingAwardsPage from './pages/ranking/RankingAwardsPage'
 import MyPage from './pages/user/MyPage'
 import ProfileEditPage from './pages/user/ProfileEditPage'
+import { userApi } from './services/api'
+
+const privatePages = new Set(['mypage', 'portfolio-create', 'portfolio-modify', 'profile-edit'])
+
+function getCurrentPage() {
+  return window.location.hash.replace('#', '').split('?')[0]
+}
 
 function App() {
-  const [page, setPage] = useState(() =>
-    window.location.hash.replace('#', '').split('?')[0],
-  )
+  const [page, setPage] = useState(() => getCurrentPage())
 
   useEffect(() => {
     const handleHashChange = () => {
-      setPage(window.location.hash.replace('#', '').split('?')[0])
+      setPage(getCurrentPage())
     }
 
     window.addEventListener('hashchange', handleHashChange)
 
     return () => {
       window.removeEventListener('hashchange', handleHashChange)
+    }
+  }, [])
+
+  useEffect(() => {
+    const currentPage = getCurrentPage()
+    let isCancelled = false
+
+    if (currentPage === 'signup') {
+      return
+    }
+
+    userApi
+      .getMe()
+      .then(() => {
+        if (!isCancelled && (!currentPage || currentPage === 'login')) {
+          window.location.hash = 'main'
+        }
+      })
+      .catch(() => {
+        if (!isCancelled && privatePages.has(currentPage)) {
+          window.location.hash = 'login'
+        }
+      })
+
+    return () => {
+      isCancelled = true
     }
   }, [])
 

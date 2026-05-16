@@ -8,13 +8,19 @@ import {
   useRef,
   useState,
 } from 'react'
-import { imageApi, portfolioApi, userApi } from '../../../services/api'
+import {
+  imageApi,
+  portfolioApi,
+  userApi,
+} from '../../../services/api'
 import {
   categoryValues,
   detailToSaveFields,
   getSelectedPortfolioId,
 } from '../../../services/portfolioMapper'
+import { renderMarkdown } from '../../../utils/markdownRenderer'
 import DashboardHeader from '../../../widgets/header/DashboardHeader'
+import PortfolioThumbnail from '../../../widgets/portfolio/PortfolioThumbnail'
 
 const imgHeaderLogoMark =
   'https://www.figma.com/api/mcp/asset/9e3de58f-437b-4576-9f09-d7eb1bfcb00d'
@@ -39,13 +45,11 @@ const defaultMarkdown = `# 프로젝트 개요
 
 ## 문제 상황
 
-## 해결 방법
+## 핵심 기능
 
-# 핵심 기능
+## 실행 화면
 
-# 실행 화면
-
-# 기대 효과
+## 기대 효과
 `
 
 function PortfolioFormPage({ mode }: PortfolioFormPageProps) {
@@ -67,7 +71,18 @@ function PortfolioFormPage({ mode }: PortfolioFormPageProps) {
   const [participants, setParticipants] = useState<Participant[]>([])
   const markdownTextareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const renderedMarkdown = useMemo(() => renderMarkdown(markdown), [markdown])
+  const renderedMarkdown = useMemo(
+    () =>
+      renderMarkdown(markdown, {
+        heading1ClassName:
+          'mb-[12px] mt-[2px] text-[19px] font-bold text-[#121a34]',
+        heading2ClassName:
+          'mb-[8px] mt-[16px] text-[15px] font-bold text-[#102047]',
+        imageClassName: 'max-h-[160px] w-full rounded-[10px] object-contain',
+        paragraphClassName: 'mb-[8px] text-[12px] leading-[20px] text-[#61708a]',
+      }),
+    [markdown],
+  )
 
   const addTechStack = () => {
     const nextStack = stackInput.trim()
@@ -239,9 +254,40 @@ function PortfolioFormPage({ mode }: PortfolioFormPageProps) {
       setErrorMessage('')
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : '?대?吏 ?낅줈?쒖뿉 ?ㅽ뙣?덉뒿?덈떎.',
+        error instanceof Error ? error.message : '이미지 업로드에 실패했습니다.',
       )
     }
+  }
+
+  const insertMarkdownText = (text: string, cursorIndex?: number) => {
+    let nextCursorIndex: number | undefined
+
+    setMarkdown((current) => {
+      if (cursorIndex === undefined) {
+        nextCursorIndex = current.trim()
+          ? current.length + 2 + text.length
+          : text.length
+
+        return current.trim() ? `${current}\n\n${text}` : text
+      }
+
+      const safeCursorIndex = Math.min(cursorIndex, current.length)
+      const beforeCursor = current.slice(0, safeCursorIndex)
+      const afterCursor = current.slice(safeCursorIndex)
+      const prefix = beforeCursor && !beforeCursor.endsWith('\n') ? '\n' : ''
+      const suffix = afterCursor && !afterCursor.startsWith('\n') ? '\n' : ''
+      nextCursorIndex =
+        beforeCursor.length + prefix.length + text.length + suffix.length
+
+      return `${beforeCursor}${prefix}${text}${suffix}${afterCursor}`
+    })
+
+    window.setTimeout(() => {
+      if (nextCursorIndex !== undefined && markdownTextareaRef.current) {
+        markdownTextareaRef.current.focus()
+        markdownTextareaRef.current.setSelectionRange(nextCursorIndex, nextCursorIndex)
+      }
+    })
   }
 
   const handleMarkdownPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
@@ -249,12 +295,21 @@ function PortfolioFormPage({ mode }: PortfolioFormPageProps) {
       file.type.startsWith('image/'),
     )
 
-    if (!imageFile) {
+    if (imageFile) {
+      event.preventDefault()
+      insertMarkdownImage(imageFile, event.currentTarget.selectionStart)
       return
     }
 
-    event.preventDefault()
-    insertMarkdownImage(imageFile, event.currentTarget.selectionStart)
+    const clipboardText = event.clipboardData.getData('text/plain').trim()
+
+    if (isImageUrl(clipboardText)) {
+      event.preventDefault()
+      insertMarkdownText(
+        `![서비스 미리보기](${clipboardText})`,
+        event.currentTarget.selectionStart,
+      )
+    }
   }
 
   const handleMarkdownDrop = (event: DragEvent<HTMLTextAreaElement>) => {
@@ -262,12 +317,20 @@ function PortfolioFormPage({ mode }: PortfolioFormPageProps) {
       file.type.startsWith('image/'),
     )
 
-    if (!imageFile) {
+    if (imageFile) {
+      event.preventDefault()
+      insertMarkdownImage(imageFile)
       return
     }
 
-    event.preventDefault()
-    insertMarkdownImage(imageFile)
+    const droppedText =
+      event.dataTransfer.getData('text/uri-list') ||
+      event.dataTransfer.getData('text/plain')
+
+    if (isImageUrl(droppedText.trim())) {
+      event.preventDefault()
+      insertMarkdownText(`![서비스 미리보기](${droppedText.trim()})`)
+    }
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -356,9 +419,11 @@ function PortfolioFormPage({ mode }: PortfolioFormPageProps) {
           >
             {thumbnailUrl && (
               <>
-                <img
+                <PortfolioThumbnail
                   alt="대표 이미지 미리보기"
-                  className="h-full w-full object-cover"
+                  className="flex h-full w-full items-center justify-center overflow-hidden text-[13px] font-medium text-[#5c6a84]"
+                  fallback="대표 이미지"
+                  imageClassName="h-full w-full object-contain"
                   src={thumbnailUrl}
                 />
                 <span className="absolute bottom-[14px] rounded-full bg-white/90 px-[14px] py-[7px] text-[12px] font-semibold text-[#2e569d] shadow-[0px_8px_18px_-12px_rgba(18,26,52,0.35)]">
@@ -615,6 +680,27 @@ function validateImageFile(file: File) {
   return ''
 }
 
+function isImageUrl(value: string) {
+  if (!value || /\s/.test(value)) {
+    return false
+  }
+
+  try {
+    const url = new URL(value, window.location.origin)
+    const imageExtensionPattern = /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i
+    const imagePathPattern = /^\/image\//i
+    const knownImageHostPattern = /(^|\.)placehold\.co$/i
+
+    return (
+      imageExtensionPattern.test(url.pathname) ||
+      imagePathPattern.test(url.pathname) ||
+      knownImageHostPattern.test(url.hostname)
+    )
+  } catch {
+    return false
+  }
+}
+
 interface TextFieldProps {
   className?: string
   label: string
@@ -710,72 +796,6 @@ function ParticipantChip({
       )}
     </article>
   )
-}
-
-function renderMarkdown(markdown: string) {
-  const lines = markdown.split('\n')
-
-  return lines.map((line, index) => {
-    const imageMatch = line.match(/^!\[(.*)]\((.*)\)$/)
-
-    if (imageMatch) {
-      return (
-        <figure className="my-[14px]" key={`${line}-${index}`}>
-          <img
-            alt={imageMatch[1]}
-            className="max-h-[160px] w-full rounded-[10px] object-cover"
-            src={imageMatch[2]}
-          />
-        </figure>
-      )
-    }
-
-    if (line.startsWith('# ')) {
-      return (
-        <h1
-          className="mb-[12px] mt-[2px] text-[19px] font-bold text-[#121a34]"
-          key={`${line}-${index}`}
-        >
-          {line.replace('# ', '')}
-        </h1>
-      )
-    }
-
-    if (line.startsWith('## ')) {
-      return (
-        <h2
-          className="mb-[8px] mt-[16px] text-[15px] font-bold text-[#102047]"
-          key={`${line}-${index}`}
-        >
-          {line.replace('## ', '')}
-        </h2>
-      )
-    }
-
-    if (line.startsWith('- ')) {
-      return (
-        <p
-          className="mb-[6px] pl-[10px] text-[12px] leading-[20px] text-[#61708a]"
-          key={`${line}-${index}`}
-        >
-          • {line.replace('- ', '')}
-        </p>
-      )
-    }
-
-    if (!line.trim()) {
-      return <div className="h-[6px]" key={`empty-${index}`} />
-    }
-
-    return (
-      <p
-        className="mb-[8px] text-[12px] leading-[20px] text-[#61708a]"
-        key={`${line}-${index}`}
-      >
-        {line}
-      </p>
-    )
-  })
 }
 
 export default PortfolioFormPage

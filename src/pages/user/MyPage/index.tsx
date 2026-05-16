@@ -1,5 +1,11 @@
 import { type MouseEvent, useEffect, useState } from 'react'
-import { portfolioApi, userApi, type PortfolioListItem, type UserProfile } from '../../../services/api'
+import {
+  authApi,
+  portfolioApi,
+  userApi,
+  type PortfolioListItem,
+  type UserProfile,
+} from '../../../services/api'
 import {
   getInitial,
   toModifyPortfolioHash,
@@ -12,6 +18,8 @@ const imgHeaderLogoMark =
 
 function MyPage() {
   const [errorMessage, setErrorMessage] = useState('')
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [myPortfolios, setMyPortfolios] = useState<PortfolioListItem[]>([])
   const [profile, setProfile] = useState<UserProfile | null>(null)
 
@@ -53,6 +61,24 @@ function MyPage() {
     event.stopPropagation()
   }
 
+  const handleLogout = async () => {
+    setIsLoggingOut(true)
+    setErrorMessage('')
+
+    try {
+      await authApi.logout()
+      window.sessionStorage.removeItem('selectedPortfolioId')
+      window.location.hash = 'login'
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : '로그아웃에 실패했습니다.',
+      )
+      setIsLogoutModalOpen(false)
+    } finally {
+      setIsLoggingOut(false)
+    }
+  }
+
   return (
     <main className="min-h-screen overflow-auto bg-[#f3f7fc]">
       <section
@@ -88,12 +114,21 @@ function MyPage() {
               {profile?.githubLink ?? 'GitHub 링크 없음'}
             </p>
           </div>
-          <a
-            className="ml-auto flex h-[40px] w-[126px] items-center justify-center rounded-[8px] border border-[#2e569d] bg-white text-[13px] font-semibold text-[#2e569d]"
-            href="#profile-edit"
-          >
-            프로필 수정
-          </a>
+          <div className="ml-auto flex gap-[10px]">
+            <a
+              className="flex h-[40px] w-[126px] items-center justify-center rounded-[8px] border border-[#2e569d] bg-white text-[13px] font-semibold text-[#2e569d]"
+              href="#profile-edit"
+            >
+              프로필 수정
+            </a>
+            <button
+              className="flex h-[40px] w-[92px] items-center justify-center rounded-[8px] border border-[#c9d5e7] bg-[#f7fbff] text-[13px] font-semibold text-[#5c6a84] transition hover:bg-[#edf4fd]"
+              onClick={() => setIsLogoutModalOpen(true)}
+              type="button"
+            >
+              로그아웃
+            </button>
+          </div>
         </section>
 
         <div className="absolute left-[48px] top-[404px] flex h-[58px] w-[1184px] items-center rounded-[12px] border border-[#c9d5e7] bg-white px-[24px]">
@@ -148,6 +183,44 @@ function MyPage() {
             </article>
           ))}
         </div>
+
+        {isLogoutModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#121a34]/45 px-[24px]">
+            <section
+              aria-modal="true"
+              className="w-[392px] rounded-[18px] border border-[#d8e2f0] bg-white px-[28px] py-[26px] shadow-[0px_24px_54px_-20px_rgba(18,26,52,0.45)]"
+              role="dialog"
+            >
+              <div className="mx-auto flex size-[48px] items-center justify-center rounded-full bg-[#edf4fd] text-[22px] font-bold text-[#2e569d]">
+                i
+              </div>
+              <h2 className="mt-[18px] text-center text-[20px] font-bold leading-[30px] text-[#121a34]">
+                로그아웃하시겠습니까?
+              </h2>
+              <p className="mt-[10px] text-center text-[13px] leading-[21px] text-[#5c6a84]">
+                현재 세션이 종료되고 로그인 화면으로 이동합니다.
+              </p>
+              <div className="mt-[24px] flex gap-[10px]">
+                <button
+                  className="h-[42px] flex-1 rounded-[8px] border border-[#c9d5e7] bg-white text-[13px] font-semibold text-[#2e569d] hover:bg-[#f3f7fc]"
+                  disabled={isLoggingOut}
+                  onClick={() => setIsLogoutModalOpen(false)}
+                  type="button"
+                >
+                  취소
+                </button>
+                <button
+                  className="h-[42px] flex-1 rounded-[8px] bg-[#2e569d] text-[13px] font-semibold text-white shadow-[0px_8px_16px_-8px_rgba(46,86,157,0.35)] disabled:bg-[#9db4d7]"
+                  disabled={isLoggingOut}
+                  onClick={handleLogout}
+                  type="button"
+                >
+                  {isLoggingOut ? '로그아웃 중' : '로그아웃'}
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
       </section>
     </main>
   )

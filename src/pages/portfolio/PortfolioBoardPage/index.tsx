@@ -8,6 +8,7 @@ import {
   toSelectedPortfolioHash,
 } from '../../../services/portfolioMapper'
 import DashboardHeader from '../../../widgets/header/DashboardHeader'
+import PortfolioThumbnail from '../../../widgets/portfolio/PortfolioThumbnail'
 
 const imgHeaderLogoMark =
   'https://www.figma.com/api/mcp/asset/52832cb4-be6d-4a34-b6ee-515f55db23b3'
@@ -212,9 +213,12 @@ function PortfolioBoardPage() {
                 }}
                 type="button"
               >
-                <div className="flex h-[48px] w-[56px] items-center justify-center rounded-[8px] border border-[#d4e1f2] bg-[#e9eff8] text-[10px] font-semibold text-[#61708a]">
-                  IMG
-                </div>
+                <PortfolioThumbnail
+                  alt={`${portfolio.projectName} 대표 이미지`}
+                  className="flex h-[48px] w-[56px] items-center justify-center overflow-hidden rounded-[8px] border border-[#d4e1f2] bg-[#e9eff8] text-[10px] font-semibold text-[#61708a]"
+                  fallback="IMG"
+                  src={portfolio.thumbnailUrl}
+                />
                 <div className="min-w-0">
                   <h3 className="truncate text-[15px] font-semibold text-[#102047]">
                     {portfolio.projectName}
@@ -282,9 +286,12 @@ function PortfolioBoardPage() {
 
         {selectedPortfolio && (
           <aside className="absolute left-[799px] top-[273px] h-[526px] w-[432px] rounded-[12px] border border-[#c9d5e7] bg-white p-[24px]">
-            <div className="flex h-[150px] items-center justify-center rounded-[10px] bg-[#e7f0fa] text-[13px] font-medium text-[#121a34]">
-              대표 이미지
-            </div>
+            <PortfolioThumbnail
+              alt={`${selectedPortfolio.projectName} 대표 이미지`}
+              className="flex h-[150px] items-center justify-center overflow-hidden rounded-[10px] bg-[#e7f0fa] text-[13px] font-medium text-[#121a34]"
+              fallback="대표 이미지"
+              src={selectedPortfolio.thumbnailUrl}
+            />
             <div className="mt-[26px] flex items-start justify-between">
               <h2 className="text-[22px] font-semibold leading-[32px] text-[#121a34]">
                 {selectedPortfolio.projectName}

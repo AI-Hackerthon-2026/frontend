@@ -53,17 +53,24 @@ export function splitSummary(summary: string) {
 
 export function toSelectedPortfolioHash(id: number) {
   window.sessionStorage.setItem('selectedPortfolioId', String(id))
-  window.location.hash = 'portfolio-detail'
+  window.location.hash = `portfolio-detail?id=${id}`
 }
 
 export function toModifyPortfolioHash(id: number) {
   window.sessionStorage.setItem('selectedPortfolioId', String(id))
-  window.location.hash = 'portfolio-modify'
+  window.location.hash = `portfolio-modify?id=${id}`
 }
 
 export function getSelectedPortfolioId() {
+  const hashQuery = window.location.hash.split('?')[1] ?? ''
+  const queryId = Number(new URLSearchParams(hashQuery).get('id'))
+
+  if (Number.isFinite(queryId) && queryId > 0) {
+    return queryId
+  }
+
   const storedId = Number(window.sessionStorage.getItem('selectedPortfolioId'))
-  return Number.isFinite(storedId) && storedId > 0 ? storedId : 1
+  return Number.isFinite(storedId) && storedId > 0 ? storedId : 0
 }
 
 export function getInitial(name?: string | null) {

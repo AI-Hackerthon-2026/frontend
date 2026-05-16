@@ -11,11 +11,13 @@ import {
   toSelectedPortfolioHash,
 } from '../../../services/portfolioMapper'
 import DashboardHeader from '../../../widgets/header/DashboardHeader'
+import PortfolioThumbnail from '../../../widgets/portfolio/PortfolioThumbnail'
 
 const imgHeaderLogoMark =
   'https://www.figma.com/api/mcp/asset/32ce995a-f29b-4ccb-b7d3-03a243641f94'
 
 const termOrder = ['ALL_TIME', 'CURRENT_SEMESTER', 'LAST_SEMESTER'] as const
+const slideDurationMs = 4000
 const termLabels = {
   ALL_TIME: '전체',
   CURRENT_SEMESTER: '이번 학기',
@@ -24,18 +26,45 @@ const termLabels = {
 const slideRankStyles = {
   1: {
     accent: 'bg-[#ffc32f]',
+    background: 'bg-[linear-gradient(115deg,#13224f_0%,#274a9d_48%,#f2b632_100%)]',
     badge: 'bg-[#ffc32f] text-[#121a34]',
+    border: 'border-[#f3c548]',
+    cta: 'bg-[#e2842a] hover:bg-[#cf761f]',
+    label: 'text-[#ffe6a1]',
     like: 'bg-[#2e569d]',
+    nav: 'bg-[#1f3472] hover:bg-[#172755]',
+    pattern: 'bg-[linear-gradient(135deg,rgba(255,255,255,0.13)_0_1px,transparent_1px_26px)]',
+    preview: 'bg-[#fff7df] text-[#9a641d]',
+    progress: 'bg-[#ffc32f]',
+    surface: 'bg-[rgba(255,255,255,0.96)]',
   },
   2: {
     accent: 'bg-[#c7d6eb]',
+    background: 'bg-[linear-gradient(115deg,#182137_0%,#475d7a_50%,#dce6f2_100%)]',
     badge: 'bg-[#edf4fd] text-[#2e569d]',
+    border: 'border-[#c7d6eb]',
+    cta: 'bg-[#506783] hover:bg-[#40536d]',
+    label: 'text-[#dce8f7]',
     like: 'bg-[#40589e]',
+    nav: 'bg-[#34465f] hover:bg-[#28364a]',
+    pattern: 'bg-[linear-gradient(90deg,rgba(255,255,255,0.1)_0_1px,transparent_1px_30px)]',
+    preview: 'bg-[#eef4fb] text-[#40536d]',
+    progress: 'bg-[#dce6f2]',
+    surface: 'bg-[rgba(248,251,255,0.96)]',
   },
   3: {
     accent: 'bg-[#e2842a]',
+    background: 'bg-[linear-gradient(115deg,#271c34_0%,#7a4a31_50%,#e2842a_100%)]',
     badge: 'bg-[#fff1e3] text-[#b96624]',
+    border: 'border-[#e6a35f]',
+    cta: 'bg-[#b96624] hover:bg-[#97501b]',
+    label: 'text-[#ffd6ad]',
     like: 'bg-[#b96624]',
+    nav: 'bg-[#693f31] hover:bg-[#553127]',
+    pattern: 'bg-[linear-gradient(135deg,rgba(255,246,237,0.12)_0_1px,transparent_1px_24px)]',
+    preview: 'bg-[#fff1e3] text-[#9a5520]',
+    progress: 'bg-[#e2842a]',
+    surface: 'bg-[rgba(255,250,245,0.96)]',
   },
 } as const
 
@@ -101,7 +130,7 @@ function MainDashboardPage() {
         updateTermBySlideIndex(newIndex)
         return newIndex
       })
-    }, 4000)
+    }, slideDurationMs)
 
     return () => {
       window.clearInterval(slideTimer)
@@ -177,9 +206,21 @@ function MainDashboardPage() {
           </p>
         </div>
 
-        <section className="absolute left-[48px] top-[182px] h-[464px] w-[1184px] overflow-hidden rounded-[16px] border-2 border-[rgba(98,183,230,0.72)] bg-gradient-to-r from-[#121b42] via-[#253e86] via-[45%] to-[#2e569d] shadow-[0px_18px_30px_-18px_rgba(13,20,51,0.22)]">
-          <div className="absolute left-[602px] top-[31px] h-[260px] w-[460px] rounded-full bg-[rgba(128,246,255,0.13)]" />
-          <div className="absolute left-[332px] top-[92px] h-[220px] w-[360px] rounded-full bg-[rgba(255,195,47,0.12)]" />
+        <section
+          className={[
+            'absolute left-[48px] top-[182px] h-[464px] w-[1184px] overflow-hidden rounded-[16px] border-2 shadow-[0px_18px_30px_-18px_rgba(13,20,51,0.22)] transition-colors duration-500',
+            currentSlideStyle.background,
+            currentSlideStyle.border,
+          ].join(' ')}
+        >
+          <div
+            className={[
+              'absolute inset-0 opacity-70 transition-colors duration-500',
+              currentSlideStyle.pattern,
+            ].join(' ')}
+          />
+          <div className="absolute left-[612px] top-[34px] h-[360px] w-[2px] bg-white/20" />
+          <div className="absolute left-[637px] top-[34px] h-[360px] w-[2px] bg-white/10" />
 
           <div className="absolute left-[36px] top-[31px] flex gap-[12px]">
             <button
@@ -217,7 +258,12 @@ function MainDashboardPage() {
             </button>
           </div>
 
-          <p className="absolute left-[36px] top-[112px] text-[22px] font-bold leading-[34px] text-[#62b7e6]">
+          <p
+            className={[
+              'absolute left-[36px] top-[112px] text-[22px] font-bold leading-[34px]',
+              currentSlideStyle.label,
+            ].join(' ')}
+          >
             {currentSlide
               ? `${currentSlide.periodLabel} ${currentSlide.rankLabel} 포트폴리오`
               : `${termLabels[term]} 포트폴리오`}
@@ -243,7 +289,10 @@ function MainDashboardPage() {
             {slideDescription2}
           </p>
           <button
-            className="absolute left-[40px] top-[370px] flex h-[42px] w-[172px] items-center justify-center rounded-[9px] bg-[#e2842a] text-[13px] font-semibold text-white"
+            className={[
+              'absolute left-[40px] top-[370px] flex h-[42px] w-[172px] items-center justify-center rounded-[9px] text-[13px] font-semibold text-white transition-colors',
+              currentSlideStyle.cta,
+            ].join(' ')}
             onClick={() => currentSlide && toSelectedPortfolioHash(currentSlide.id)}
             type="button"
           >
@@ -251,12 +300,21 @@ function MainDashboardPage() {
           </button>
 
           <div
-            className="absolute left-[655px] top-[58px] h-[318px] w-[360px] rounded-[22px] bg-[rgba(255,255,255,0.96)] shadow-[0px_24px_36px_-18px_rgba(5,10,31,0.3)] animate-dashboard-slide"
+            className={[
+              'absolute left-[655px] top-[58px] h-[318px] w-[360px] rounded-[22px] shadow-[0px_24px_36px_-18px_rgba(5,10,31,0.3)] animate-dashboard-slide',
+              currentSlideStyle.surface,
+            ].join(' ')}
             key={`card-${currentSlide?.id ?? 'empty'}-${slideIndex}`}
           >
-            <div className="absolute left-[28px] top-[28px] flex h-[138px] w-[304px] items-center justify-center rounded-[16px] border border-[#c9d5e7] bg-[#e7f0fa] text-[15px] font-bold text-[#2e569d]">
-              PROJECT PREVIEW
-            </div>
+            <PortfolioThumbnail
+              alt={`${currentSlide?.projectName ?? '포트폴리오'} 대표 이미지`}
+              className={[
+                'absolute left-[28px] top-[28px] flex h-[138px] w-[304px] items-center justify-center overflow-hidden rounded-[16px] border border-white/80 text-[15px] font-bold',
+                currentSlideStyle.preview,
+              ].join(' ')}
+              fallback="PROJECT PREVIEW"
+              src={currentSlide?.thumbnailUrl}
+            />
             <div
               className={[
                 'absolute -left-[8px] -top-[8px] flex size-[58px] items-center justify-center rounded-full border border-white text-[13px] font-bold',
@@ -290,13 +348,19 @@ function MainDashboardPage() {
             <div className="flex">
               <button
                 onClick={handlePrevSlide}
-                className="h-[42px] w-[56px] bg-[#253e86] text-white flex items-center justify-center hover:bg-[#1a2a5a] transition-colors leading-none"
+                className={[
+                  'h-[42px] w-[56px] text-white flex items-center justify-center transition-colors leading-none',
+                  currentSlideStyle.nav,
+                ].join(' ')}
               >
                 <span className="text-[28px] font-bold">‹</span>
               </button>
               <button
                 onClick={handleNextSlide}
-                className="h-[42px] w-[56px] bg-[#253e86] text-white flex items-center justify-center hover:bg-[#1a2a5a] transition-colors leading-none"
+                className={[
+                  'h-[42px] w-[56px] text-white flex items-center justify-center transition-colors leading-none',
+                  currentSlideStyle.nav,
+                ].join(' ')}
               >
                 <span className="text-[28px] font-bold">›</span>
               </button>
@@ -304,12 +368,15 @@ function MainDashboardPage() {
           </div>
           <div className="absolute left-[40px] top-[340px] h-[5px] w-[420px] rounded-[3px] bg-[rgba(255,255,255,0.24)]">
             <div
-              className="h-[5px] rounded-[3px] bg-[#62b7e6] transition-all"
+              className={[
+                'h-[5px] origin-left rounded-[3px]',
+                slides.length > 1 ? 'animate-dashboard-progress' : '',
+                currentSlideStyle.progress,
+              ].join(' ')}
+              key={`progress-${currentSlide?.id ?? 'empty'}-${slideIndex}`}
               style={{
-                width:
-                  slides.length > 0
-                    ? `${((slideIndex + 1) / slides.length) * 100}%`
-                    : '0%',
+                animationDuration: `${slideDurationMs}ms`,
+                transform: slides.length > 0 ? undefined : 'scaleX(0)',
               }}
             />
           </div>
@@ -329,9 +396,12 @@ function MainDashboardPage() {
               key={portfolio.id}
               onClick={() => toSelectedPortfolioHash(portfolio.id)}
             >
-              <div className="flex h-[108px] items-center justify-center rounded-[10px] bg-[#e7f0fa] text-[13px] font-medium text-[#5c6a84]">
-                프로젝트 썸네일
-              </div>
+              <PortfolioThumbnail
+                alt={`${portfolio.projectName} 대표 이미지`}
+                className="flex h-[108px] items-center justify-center overflow-hidden rounded-[10px] bg-[#e7f0fa] text-[13px] font-medium text-[#5c6a84]"
+                fallback="프로젝트 썸네일"
+                src={portfolio.thumbnailUrl}
+              />
               <h3 className="mt-[15px] text-[17px] font-semibold text-[#121a34]">
                 {portfolio.projectName}
               </h3>
