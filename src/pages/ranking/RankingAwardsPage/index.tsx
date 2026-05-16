@@ -1,64 +1,66 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { portfolioApi, type PortfolioListItem } from '../../../services/api'
+import { formatSkills, periodValues, toSelectedPortfolioHash } from '../../../services/portfolioMapper'
 import DashboardHeader from '../../../widgets/header/DashboardHeader'
 
 const imgHeaderLogoMark =
   'https://www.figma.com/api/mcp/asset/c7bad5af-1d95-4a68-a691-58b960e93142'
 
-const topProjects = [
+const topProjectStyles = [
   {
     border: 'border-[#f5c84b]',
     button: 'bg-[#e2842a] text-white',
     card: 'bg-[#40589e] text-white',
     label: '최우수 프로젝트',
-    meta: '김진우 · ♥ 42',
-    rank: '1위',
     rankColor: 'text-[#f5c84b]',
     trophyBg: 'bg-[#fff1b8]',
     trophyBorder: 'border-[#f5c84b]',
     trophyText: 'text-[#bf7b00]',
-    title: 'AI 코드 리뷰 도우미',
   },
   {
     border: 'border-[#bfd0e6]',
     button: 'border border-[#2e569d] bg-white text-[#2e569d]',
     card: 'bg-white text-[#102047]',
     label: '우수 프로젝트',
-    meta: '매칭랩 · ♥ 35',
-    rank: '2위',
     rankColor: 'text-[#bfd0e6]',
     trophyBg: 'bg-[#f2f6fb]',
     trophyBorder: 'border-[#bfd0e6]',
     trophyText: 'text-[#6d819d]',
-    title: '캠퍼스 스터디 매칭',
   },
   {
     border: 'border-[#d88b3a]',
     button: 'border border-[#2e569d] bg-white text-[#2e569d]',
     card: 'bg-white text-[#102047]',
     label: '인기 프로젝트',
-    meta: 'AlgoRun · ♥ 28',
-    rank: '3위',
     rankColor: 'text-[#d88b3a]',
     trophyBg: 'bg-[#fff1e3]',
     trophyBorder: 'border-[#d88b3a]',
     trophyText: 'text-[#b96624]',
-    title: '알고리즘 배틀 플랫폼',
   },
 ]
 
-const rankingRows = [
-  ['1', 'AI 코드 리뷰 도우미', '코드버디 팀', 'React · Spring · GPT', '42'],
-  ['2', '캠퍼스 스터디 매칭', '매칭랩', 'Next.js · Prisma', '35'],
-  ['3', '알고리즘 배틀 플랫폼', 'AlgoRun', 'Vue · Node.js', '28'],
-  ['4', '동아리 출석 관리', 'CS Crew', 'Flutter · Firebase', '19'],
-  ['5', '운영체제 스터디 로그', 'Kernel Lab', 'C · Linux', '17'],
-  ['6', '학식 알림 봇', 'MealPing', 'Python · Discord', '15'],
-  ['7', '강의실 예약 도우미', 'Roomie', 'Next.js · Supabase', '11'],
-  ['8', '캡스톤 일정 보드', 'PlanIt', 'React · Supabase', '9'],
-]
-
 function RankingAwardsPage() {
+  const [errorMessage, setErrorMessage] = useState('')
   const [period, setPeriod] = useState('이번 학기')
+  const [rankingRows, setRankingRows] = useState<PortfolioListItem[]>([])
+
+  useEffect(() => {
+    const loadRanking = async () => {
+      setErrorMessage('')
+
+      try {
+        const data = await portfolioApi.getRanking(periodValues[period])
+        setRankingRows(data)
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error ? error.message : '랭킹을 불러오지 못했습니다.',
+        )
+        setRankingRows([])
+      }
+    }
+
+    loadRanking()
+  }, [period])
 
   return (
     <main className="min-h-screen overflow-auto bg-[#f3f7fc]">
@@ -95,7 +97,10 @@ function RankingAwardsPage() {
         </div>
 
         <div className="absolute left-[67px] top-[187px] flex gap-[32px]">
-          {topProjects.map((project, index) => (
+          {topProjectStyles.map((project, index) => {
+            const portfolio = rankingRows[index]
+
+            return (
             <article
               className={[
                 'relative h-[360px] w-[360px] rounded-[20px] border-[1.5px] p-[32px] shadow-[0px_18px_34px_-8px_rgba(27,36,81,0.18)]',
@@ -103,7 +108,7 @@ function RankingAwardsPage() {
                 project.card,
                 index === 0 ? 'border-3' : '',
               ].join(' ')}
-              key={project.rank}
+              key={portfolio?.id ?? index}
             >
               {index === 0 && (
                 <div className="absolute left-[128px] top-[-15px] h-[28px] w-[104px] rounded-[14px] bg-[#ffc32f] text-center text-[11px] font-bold leading-[28px] tracking-[0.66px] text-[#121a34]">
@@ -121,28 +126,32 @@ function RankingAwardsPage() {
                 {index === 0 ? '♛' : index === 1 ? 'Ⅱ' : 'Ⅲ'}
               </div>
               <p className={`text-[28px] font-bold leading-[40px] ${project.rankColor}`}>
-                {project.rank}
+                {index + 1}위
               </p>
               <h2 className="mt-[18px] text-[19px] font-bold leading-[28px]">
                 {project.label}
               </h2>
               <p className="mt-[28px] text-[18px] font-semibold leading-[28px]">
-                {project.title}
+                {portfolio?.projectName ?? '데이터 없음'}
               </p>
               <p className="mt-[20px] text-[13px] font-medium opacity-80">
-                {project.meta}
+                {portfolio
+                  ? `${portfolio.authorName} · ♥ ${portfolio.likeCount}`
+                  : '랭킹 데이터를 기다리는 중입니다.'}
               </p>
-              <a
+              <button
                 className={[
                   'absolute left-[32px] top-[276px] flex h-[40px] w-[120px] items-center justify-center rounded-[8px] text-[13px] font-semibold',
                   project.button,
                 ].join(' ')}
-                href="#portfolio-detail"
+                onClick={() => portfolio && toSelectedPortfolioHash(portfolio.id)}
+                type="button"
               >
                 상세 보기
-              </a>
+              </button>
             </article>
-          ))}
+            )
+          })}
         </div>
 
         <section className="absolute left-[47px] top-[586px] h-[610px] w-[1184px] overflow-hidden rounded-[12px] border border-[#c9d5e7] bg-white">
@@ -154,7 +163,15 @@ function RankingAwardsPage() {
             <span className="justify-self-center">공감</span>
             <span aria-hidden="true" />
           </div>
-          {rankingRows.map(([rank, title, team, stack, likes]) => (
+          {errorMessage && (
+            <div className="flex h-[68px] items-center border-t border-[#dde7f3] px-[32px] text-[13px] text-[#c7252e]">
+              {errorMessage}
+            </div>
+          )}
+          {rankingRows.map((portfolio, index) => {
+            const rank = String(index + 1)
+
+            return (
             <div
               className={[
                 'grid h-[68px] grid-cols-[90px_350px_200px_260px_130px_100px] items-center border-t border-[#dde7f3] px-[32px]',
@@ -166,7 +183,7 @@ function RankingAwardsPage() {
                       ? 'bg-[rgba(255,240,222,0.5)]'
                       : 'bg-white',
               ].join(' ')}
-              key={rank}
+              key={portfolio.id}
             >
               <span
                 className={[
@@ -183,23 +200,27 @@ function RankingAwardsPage() {
                 {rank}
               </span>
               <strong className="text-[15px] font-bold text-[#121a34]">
-                {title}
+                {portfolio.projectName}
               </strong>
-              <span className="text-[13px] text-[#5c6a84]">{team}</span>
+              <span className="text-[13px] text-[#5c6a84]">
+                {portfolio.authorName}
+              </span>
               <span className="text-[13px] font-medium text-[#2e569d]">
-                {stack}
+                {formatSkills(portfolio.skills)}
               </span>
               <span className="justify-self-center text-[14px] font-bold text-[#c7252e]">
-                ♥ {likes}
+                ♥ {portfolio.likeCount}
               </span>
-              <a
+              <button
                 className="ml-[14px] flex h-[40px] w-[64px] items-center justify-center rounded-[8px] border border-[#c9d5e7] bg-white text-[13px] font-semibold text-[#2e569d]"
-                href="#portfolio-detail"
+                onClick={() => toSelectedPortfolioHash(portfolio.id)}
+                type="button"
               >
                 상세
-              </a>
+              </button>
             </div>
-          ))}
+            )
+          })}
         </section>
       </section>
     </main>

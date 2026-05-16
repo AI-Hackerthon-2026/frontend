@@ -1,4 +1,10 @@
-import { type ChangeEvent, useMemo, useState } from 'react'
+import { type ChangeEvent, type FormEvent, useEffect, useMemo, useState } from 'react'
+import { imageApi, portfolioApi, userApi } from '../../../services/api'
+import {
+  categoryValues,
+  detailToSaveFields,
+  getSelectedPortfolioId,
+} from '../../../services/portfolioMapper'
 import DashboardHeader from '../../../widgets/header/DashboardHeader'
 
 const imgHeaderLogoMark =
@@ -12,10 +18,13 @@ interface Participant {
   id: number
   name: string
   role: string
+  userId: number
   fixed?: boolean
 }
 
 const categories = ['졸업 프로젝트', 'P-프로젝트', '자율 프로젝트']
+const imageMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+const maxImageSize = 5 * 1024 * 1024
 const roles = ['Frontend', 'Backend', 'AI / Data', 'Design', 'DevOps', 'PM']
 const defaultMarkdown = `# 프로젝트 개요
 ## 문제 상황
@@ -35,17 +44,20 @@ const defaultMarkdown = `# 프로젝트 개요
 function PortfolioFormPage({ mode }: PortfolioFormPageProps) {
   const isModify = mode === 'modify'
   const [category, setCategory] = useState(categories[0])
+  const [deploymentLink, setDeploymentLink] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
+  const [githubLink, setGithubLink] = useState('')
   const [markdown, setMarkdown] = useState(defaultMarkdown)
+  const [myRole, setMyRole] = useState('Frontend')
+  const [projectName, setProjectName] = useState('')
   const [stackInput, setStackInput] = useState('')
-  const [techStacks, setTechStacks] = useState(['React', 'Spring', 'GPT API'])
-  const [startDate, setStartDate] = useState('2026-05-01')
-  const [endDate, setEndDate] = useState('2026-06-10')
+  const [summary, setSummary] = useState('')
+  const [techStacks, setTechStacks] = useState<string[]>([])
+  const [thumbnailUrl, setThumbnailUrl] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const [newParticipantName, setNewParticipantName] = useState('')
-  const [participants, setParticipants] = useState<Participant[]>([
-    { id: 1, name: '김진우', role: 'Frontend', fixed: true },
-    { id: 2, name: '이서연', role: 'Backend' },
-    { id: 3, name: '박민재', role: 'AI / Data' },
-  ])
+  const [participants, setParticipants] = useState<Participant[]>([])
 
   const renderedMarkdown = useMemo(() => renderMarkdown(markdown), [markdown])
 
@@ -60,18 +72,87 @@ function PortfolioFormPage({ mode }: PortfolioFormPageProps) {
     setStackInput('')
   }
 
-  const addParticipant = () => {
+  useEffect(() => {
+    if (!isModify) {
+      return
+    }
+
+    const loadPortfolio = async () => {
+      setErrorMessage('')
+
+      try {
+        const portfolio = await portfolioApi.getDetail(getSelectedPortfolioId())
+        const fields = detailToSaveFields(portfolio)
+        setCategory(categories.find((item) => categoryValues[item] === fields.category) ?? categories[0])
+        setDeploymentLink(fields.deploymentLink)
+        setGithubLink(fields.githubLink)
+        setMarkdown(fields.description)
+        setProjectName(fields.projectName)
+        setStartDate(fields.startDate)
+        setEndDate(fields.endDate)
+        setSummary(fields.summary)
+        setTechStacks(fields.skills)
+        setThumbnailUrl(fields.thumbnailUrl)
+        setParticipants(
+          portfolio.participants.map((participant) => ({
+            fixed: participant.owner,
+            id: participant.userId,
+            name: participant.name,
+            role: participant.role,
+            userId: participant.userId,
+          })),
+        )
+        setMyRole(portfolio.participants.find((participant) => participant.owner)?.role ?? 'Frontend')
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : '포트폴리오 정보를 불러오지 못했습니다.',
+        )
+      }
+    }
+
+    loadPortfolio()
+  }, [isModify])
+
+  const addParticipant = async () => {
     const nextName = newParticipantName.trim()
 
     if (!nextName) {
       return
     }
 
-    setParticipants((current) => [
-      ...current,
-      { id: Date.now(), name: nextName, role: roles[0] },
-    ])
-    setNewParticipantName('')
+    try {
+      const users = await userApi.search(nextName)
+      const user = users[0]
+
+      if (!user) {
+        setErrorMessage('검색된 참여자가 없습니다.')
+        return
+      }
+
+      setParticipants((current) => {
+        if (current.some((participant) => participant.userId === user.id)) {
+          return current
+        }
+
+        return [
+          ...current,
+          {
+            id: user.id,
+            name: `${user.name} (${user.studentId})`,
+            role: roles[0],
+            userId: user.id,
+          },
+        ]
+      })
+      setNewParticipantName('')
+      setErrorMessage('')
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : '참여자 검색에 실패했습니다.',
+      )
+    }
   }
 
   const updateParticipantRole = (id: number, role: string) => {
@@ -80,6 +161,73 @@ function PortfolioFormPage({ mode }: PortfolioFormPageProps) {
         participant.id === id ? { ...participant, role } : participant,
       ),
     )
+  }
+
+  const handleThumbnailUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+
+    if (!file) {
+      return
+    }
+
+    if (!imageMimeTypes.includes(file.type)) {
+      setErrorMessage('jpg, png, gif, webp 형식의 이미지만 업로드 가능합니다.')
+      event.target.value = ''
+      return
+    }
+
+    if (file.size > maxImageSize) {
+      setErrorMessage('대표 이미지는 5MB 이하만 업로드할 수 있습니다.')
+      event.target.value = ''
+      return
+    }
+
+    try {
+      const data = await imageApi.upload(file)
+      setThumbnailUrl(data.imageUrl)
+      setErrorMessage('')
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : '이미지 업로드에 실패했습니다.',
+      )
+    }
+  }
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setErrorMessage('')
+
+    const requestBody = {
+      category: categoryValues[category] ?? 'AUTONOMOUS',
+      deploymentLink: deploymentLink || undefined,
+      description: markdown,
+      endDate,
+      githubLink: githubLink || undefined,
+      myRole,
+      participants: participants
+        .filter((participant) => !participant.fixed)
+        .map((participant) => ({
+          role: participant.role,
+          userId: participant.userId,
+        })),
+      projectName,
+      skills: techStacks,
+      startDate,
+      summary,
+      thumbnailUrl: thumbnailUrl || undefined,
+    }
+
+    try {
+      const savedPortfolio = isModify
+        ? await portfolioApi.update(getSelectedPortfolioId(), requestBody)
+        : await portfolioApi.create(requestBody)
+      window.sessionStorage.setItem('selectedPortfolioId', String(savedPortfolio.id))
+      window.location.hash = 'portfolio-detail'
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : '포트폴리오 저장에 실패했습니다.',
+      )
+    }
   }
 
   return (
@@ -101,7 +249,10 @@ function PortfolioFormPage({ mode }: PortfolioFormPageProps) {
           </p>
         </div>
 
-        <form className="absolute left-[48px] top-[184px] h-[1308px] w-[1184px] rounded-[18px] border border-[#c9d5e7] bg-white">
+        <form
+          className="absolute left-[48px] top-[184px] h-[1308px] w-[1184px] rounded-[18px] border border-[#c9d5e7] bg-white"
+          onSubmit={handleSubmit}
+        >
           <h2 className="absolute left-[40px] top-[41px] text-[19px] font-bold leading-[28px] text-[#121a34]">
             기본 정보
           </h2>
@@ -109,27 +260,34 @@ function PortfolioFormPage({ mode }: PortfolioFormPageProps) {
           <TextField
             className="absolute left-[40px] top-[91px]"
             label="프로젝트명"
+            onChange={setProjectName}
             placeholder="프로젝트명을 입력하세요"
-            value={isModify ? 'AI 코드 리뷰 도우미' : ''}
+            value={projectName}
             width="w-[500px]"
           />
           <TextField
             className="absolute left-[40px] top-[182px]"
             label="프로젝트 요약"
+            onChange={setSummary}
             placeholder="프로젝트를 한 줄로 소개하세요"
-            value={isModify ? 'PR을 분석하고 리뷰 코멘트를 생성합니다' : ''}
+            value={summary}
             width="w-[500px]"
           />
 
-          <button
+          <label
             className="absolute left-[600px] top-[90px] flex h-[234px] w-[504px] flex-col items-center justify-center rounded-[14px] border border-[#c9d5e7] bg-[#e7f0fa]"
-            type="button"
           >
             <span className="text-[34px] font-bold text-[#2e569d]">+</span>
             <span className="mt-[12px] text-[13px] font-medium text-[#5c6a84]">
-              대표 이미지 업로드 · PNG/JPG 5MB 이하
+              {thumbnailUrl || '대표 이미지 업로드 · PNG/JPG 5MB 이하'}
             </span>
-          </button>
+            <input
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              className="hidden"
+              onChange={handleThumbnailUpload}
+              type="file"
+            />
+          </label>
 
           <div className="absolute left-[40px] top-[272px]">
             <p className="text-[13px] font-semibold text-[#102047]">
@@ -157,14 +315,16 @@ function PortfolioFormPage({ mode }: PortfolioFormPageProps) {
           <div className="absolute left-[40px] top-[348px] grid w-[1064px] grid-cols-[320px_320px_376px] gap-[24px]">
             <TextField
               label="GitHub 링크"
+              onChange={setGithubLink}
               placeholder="https://github.com/username/repository"
-              value={isModify ? 'https://github.com/team/project' : ''}
+              value={githubLink}
               width="w-[320px]"
             />
             <TextField
               label="배포 링크"
+              onChange={setDeploymentLink}
               placeholder="https://project.example.com"
-              value={isModify ? 'https://project.vercel.app' : ''}
+              value={deploymentLink}
               width="w-[320px]"
             />
             <div>
@@ -191,6 +351,22 @@ function PortfolioFormPage({ mode }: PortfolioFormPageProps) {
 
           <section className="absolute left-[40px] top-[451px] h-[134px] w-[1064px] rounded-[14px] border border-[#d4e1f2] bg-[#fafcff] p-[18px]">
             <div className="flex items-end gap-[12px]">
+              <label>
+                <span className="block text-[12px] font-semibold leading-[18px] text-[#121a34]">
+                  본인 역할
+                </span>
+                <select
+                  className="mt-[9px] h-[42px] w-[160px] rounded-[8px] border border-[#c9d5e7] bg-white px-[12px] text-[12px] font-semibold text-[#2e569d] outline-none"
+                  onChange={(event) => setMyRole(event.target.value)}
+                  value={myRole}
+                >
+                  {roles.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label>
                 <span className="block text-[12px] font-semibold leading-[18px] text-[#121a34]">
                   사용 기술 스택
@@ -275,7 +451,7 @@ function PortfolioFormPage({ mode }: PortfolioFormPageProps) {
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') {
                       event.preventDefault()
-                      addParticipant()
+                        addParticipant()
                     }
                   }}
                   placeholder="참여자 이름 입력"
@@ -308,18 +484,24 @@ function PortfolioFormPage({ mode }: PortfolioFormPageProps) {
             </div>
           </section>
 
+          {errorMessage && (
+            <p className="absolute left-[40px] top-[1248px] text-[12px] font-semibold text-[#c7252e]">
+              {errorMessage}
+            </p>
+          )}
+
           <a
             className="absolute left-[872px] top-[1252px] flex h-[40px] w-[112px] items-center justify-center rounded-[8px] border border-[#2e569d] bg-white text-[13px] font-semibold text-[#2e569d]"
             href="#portfolio"
           >
             취소
           </a>
-          <a
+          <button
             className="absolute left-[1000px] top-[1252px] flex h-[40px] w-[136px] items-center justify-center rounded-[8px] bg-[#e2842a] text-[13px] font-semibold text-white"
-            href="#portfolio-detail"
+            type="submit"
           >
             {isModify ? '수정하기' : '등록하기'}
-          </a>
+          </button>
         </form>
       </section>
     </main>
@@ -329,12 +511,20 @@ function PortfolioFormPage({ mode }: PortfolioFormPageProps) {
 interface TextFieldProps {
   className?: string
   label: string
+  onChange: (value: string) => void
   placeholder: string
   value: string
   width: string
 }
 
-function TextField({ className, label, placeholder, value, width }: TextFieldProps) {
+function TextField({
+  className,
+  label,
+  onChange,
+  placeholder,
+  value,
+  width,
+}: TextFieldProps) {
   return (
     <label className={className}>
       <span className="block text-[12px] font-semibold leading-[18px] text-[#121a34]">
@@ -342,8 +532,9 @@ function TextField({ className, label, placeholder, value, width }: TextFieldPro
       </span>
       <input
         className={`mt-[9px] h-[44px] ${width} rounded-[8px] border border-[#c9d5e7] bg-white px-[14px] text-[13px] text-[#5c6a84] outline-none placeholder:text-[#9ca8ba] focus:border-[#2e569d]`}
-        defaultValue={value}
+        onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
+        value={value}
       />
     </label>
   )

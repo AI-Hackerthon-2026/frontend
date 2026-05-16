@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface Notification {
   id: string
@@ -9,6 +9,7 @@ interface Notification {
 }
 
 function NotificationDropdown() {
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([
     {
@@ -42,8 +43,29 @@ function NotificationDropdown() {
 
   const unreadCount = notifications.filter((notif) => !notif.isRead).length
 
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined
+    }
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isOpen])
+
   return (
-    <div className="relative">
+    <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="absolute left-[1031px] top-[17px] size-[36px] rounded-[10px] border border-[rgba(220,232,247,0.55)] bg-[rgba(255,255,255,0.18)] text-white flex items-center justify-center hover:bg-[rgba(255,255,255,0.24)] transition-colors"

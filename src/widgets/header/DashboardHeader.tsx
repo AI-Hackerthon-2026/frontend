@@ -1,11 +1,20 @@
+import { useEffect, useState } from 'react'
+import { userApi, type UserProfile } from '../../services/api'
+import { getInitial } from '../../services/portfolioMapper'
+import NotificationDropdown from './NotificationDropdown'
+
 interface DashboardHeaderProps {
   active?: 'main' | 'portfolio' | 'ranking' | 'mypage'
   logo: string
 }
 
-import NotificationDropdown from './NotificationDropdown'
-
 function DashboardHeader({ active, logo }: DashboardHeaderProps) {
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+
+  useEffect(() => {
+    userApi.getMe().then(setProfile).catch(() => setProfile(null))
+  }, [])
+
   return (
     <header className="absolute left-0 top-0 h-[72px] w-[1280px] bg-[#2e569d]">
       <a
@@ -40,11 +49,11 @@ function DashboardHeader({ active, logo }: DashboardHeaderProps) {
         href="#mypage"
       >
         <span className="ml-[14px] flex size-[28px] items-center justify-center rounded-full bg-[#2e569d] text-[13px] font-bold text-white">
-          J
+          {getInitial(profile?.name)}
         </span>
         <span className="ml-[8px]">
           <span className="block text-[13px] font-semibold leading-[18px] text-[#121a34]">
-            김진우
+            {profile?.name ?? '사용자'}
           </span>
           <span className="block text-[10px] font-medium leading-[14px] text-[#5c6a84]">
             내 포트폴리오

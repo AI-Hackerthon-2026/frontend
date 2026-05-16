@@ -11,11 +11,13 @@ import MyPage from './pages/user/MyPage'
 import ProfileEditPage from './pages/user/ProfileEditPage'
 
 function App() {
-  const [page, setPage] = useState(() => window.location.hash.replace('#', ''))
+  const [page, setPage] = useState(() =>
+    window.location.hash.replace('#', '').split('?')[0],
+  )
 
   useEffect(() => {
     const handleHashChange = () => {
-      setPage(window.location.hash.replace('#', ''))
+      setPage(window.location.hash.replace('#', '').split('?')[0])
     }
 
     window.addEventListener('hashchange', handleHashChange)
