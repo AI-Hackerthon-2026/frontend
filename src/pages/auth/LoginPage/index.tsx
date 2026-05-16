@@ -114,19 +114,19 @@ function LoginPage() {
             로그인
           </h2>
           <p className="mt-[4px] text-[14px] leading-[22px] text-[#5c6a84]">
-            학번과 비밀번호로 시작하세요.
+            가천대 포털 계정으로 로그인하세요.
           </p>
 
           <label
             className="mt-[39px] block text-[12px] font-semibold leading-[18px] text-[#121a34]"
             htmlFor="login-id"
           >
-            아이디
+            포털 아이디
           </label>
           <input
             className="mt-[9px] h-[44px] w-[344px] rounded-[8px] border border-[#c9d5e7] bg-white px-[14px] text-[13px] text-[#5c6a84] outline-none transition focus:border-[#2e569d]"
             id="login-id"
-            placeholder="아이디"
+            placeholder="포털 아이디"
             onChange={(event) => setPortalId(event.target.value)}
             type="text"
             value={portalId}
@@ -172,12 +172,6 @@ function LoginPage() {
           >
             {isSubmitting ? '로그인 중...' : '로그인'}
           </button>
-          <a
-            className="mt-[24px] block h-[24px] w-[344px] text-center text-[13px] font-semibold leading-[24px] text-[#2e569d]"
-            href="#signup"
-          >
-            아직 계정이 없나요? 회원가입 하기
-          </a>
         </form>
       </section>
     </main>

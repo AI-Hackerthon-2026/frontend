@@ -1,7 +1,7 @@
 import type {
   PortfolioCategory,
-  PortfolioDetail,
   PortfolioListItem,
+  PortfolioDetail,
   RankingPeriod,
   TopPortfolio,
   UserLevel,
@@ -53,17 +53,24 @@ export function splitSummary(summary: string) {
 
 export function toSelectedPortfolioHash(id: number) {
   window.sessionStorage.setItem('selectedPortfolioId', String(id))
-  window.location.hash = 'portfolio-detail'
+  window.location.hash = `portfolio-detail?id=${id}`
 }
 
 export function toModifyPortfolioHash(id: number) {
   window.sessionStorage.setItem('selectedPortfolioId', String(id))
-  window.location.hash = 'portfolio-modify'
+  window.location.hash = `portfolio-modify?id=${id}`
 }
 
 export function getSelectedPortfolioId() {
+  const hashQuery = window.location.hash.split('?')[1] ?? ''
+  const queryId = Number(new URLSearchParams(hashQuery).get('id'))
+
+  if (Number.isFinite(queryId) && queryId > 0) {
+    return queryId
+  }
+
   const storedId = Number(window.sessionStorage.getItem('selectedPortfolioId'))
-  return Number.isFinite(storedId) && storedId > 0 ? storedId : 1
+  return Number.isFinite(storedId) && storedId > 0 ? storedId : 0
 }
 
 export function getInitial(name?: string | null) {
@@ -103,4 +110,49 @@ export function detailToSaveFields(portfolio: PortfolioDetail) {
     summary: portfolio.summary,
     thumbnailUrl: portfolio.thumbnailUrl ?? '',
   }
+}
+
+export interface RankedPortfolio {
+  isTied: boolean
+  portfolio: PortfolioListItem
+  rank: number
+  rankLabel: string
+}
+
+export function rankPortfolios(portfolios: PortfolioListItem[]) {
+  const sortedPortfolios = [...portfolios].sort(
+    (first, second) => second.likeCount - first.likeCount,
+  )
+  const rankCounts = new Map<number, number>()
+  const rankedPortfolios: RankedPortfolio[] = []
+
+  sortedPortfolios.forEach((portfolio, index) => {
+    const previousPortfolio = sortedPortfolios[index - 1]
+    const previousRank = rankedPortfolios[index - 1]?.rank ?? 0
+    const rank =
+      previousPortfolio?.likeCount === portfolio.likeCount
+        ? previousRank
+        : previousRank + 1
+
+    rankCounts.set(rank, (rankCounts.get(rank) ?? 0) + 1)
+
+    rankedPortfolios.push({
+      isTied: false,
+      portfolio,
+      rank,
+      rankLabel: `${rank}위`,
+    })
+  })
+
+  return rankedPortfolios.map((rankedPortfolio) => {
+    const isTied = (rankCounts.get(rankedPortfolio.rank) ?? 0) > 1
+
+    return {
+      ...rankedPortfolio,
+      isTied,
+      rankLabel: isTied
+        ? `공동 ${rankedPortfolio.rank}위`
+        : `${rankedPortfolio.rank}위`,
+    }
+  })
 }

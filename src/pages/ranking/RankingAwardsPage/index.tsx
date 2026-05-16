@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { portfolioApi, type PortfolioListItem } from '../../../services/api'
-import { formatSkills, periodValues, toSelectedPortfolioHash } from '../../../services/portfolioMapper'
+import {
+  formatSkills,
+  periodValues,
+  rankPortfolios,
+  toSelectedPortfolioHash,
+} from '../../../services/portfolioMapper'
 import DashboardHeader from '../../../widgets/header/DashboardHeader'
 
 const imgHeaderLogoMark =
@@ -43,6 +48,7 @@ function RankingAwardsPage() {
   const [errorMessage, setErrorMessage] = useState('')
   const [period, setPeriod] = useState('이번 학기')
   const [rankingRows, setRankingRows] = useState<PortfolioListItem[]>([])
+  const rankedRows = rankPortfolios(rankingRows)
 
   useEffect(() => {
     const loadRanking = async () => {
@@ -98,7 +104,8 @@ function RankingAwardsPage() {
 
         <div className="absolute left-[67px] top-[187px] flex gap-[32px]">
           {topProjectStyles.map((project, index) => {
-            const portfolio = rankingRows[index]
+            const rankedPortfolio = rankedRows[index]
+            const portfolio = rankedPortfolio?.portfolio
 
             return (
             <article
@@ -126,7 +133,7 @@ function RankingAwardsPage() {
                 {index === 0 ? '♛' : index === 1 ? 'Ⅱ' : 'Ⅲ'}
               </div>
               <p className={`text-[28px] font-bold leading-[40px] ${project.rankColor}`}>
-                {index + 1}위
+                {rankedPortfolio?.rankLabel ?? `${index + 1}위`}
               </p>
               <h2 className="mt-[18px] text-[19px] font-bold leading-[28px]">
                 {project.label}
@@ -168,18 +175,18 @@ function RankingAwardsPage() {
               {errorMessage}
             </div>
           )}
-          {rankingRows.map((portfolio, index) => {
-            const rank = String(index + 1)
+          {rankedRows.map(({ portfolio, rank, rankLabel }) => {
+            const rankText = String(rank)
 
             return (
             <div
               className={[
                 'grid h-[68px] grid-cols-[90px_350px_200px_260px_130px_100px] items-center border-t border-[#dde7f3] px-[32px]',
-                rank === '1'
+                rank === 1
                   ? 'bg-[rgba(255,246,209,0.72)]'
-                  : rank === '2'
+                  : rank === 2
                     ? 'bg-[rgba(240,244,252,0.5)]'
-                    : rank === '3'
+                    : rank === 3
                       ? 'bg-[rgba(255,240,222,0.5)]'
                       : 'bg-white',
               ].join(' ')}
@@ -188,16 +195,16 @@ function RankingAwardsPage() {
               <span
                 className={[
                   'flex size-[24px] items-center justify-center rounded-full text-[11px] font-bold',
-                  rank === '1'
+                  rank === 1
                     ? 'bg-[#ffc32f] text-white'
-                    : rank === '2'
+                    : rank === 2
                       ? 'bg-[#c7d6eb] text-[#2e569d]'
-                      : rank === '3'
+                      : rank === 3
                         ? 'bg-[#db823d] text-white'
                         : 'text-[#121a34]',
                 ].join(' ')}
               >
-                {rank}
+                {rankText}
               </span>
               <strong className="text-[15px] font-bold text-[#121a34]">
                 {portfolio.projectName}
@@ -215,6 +222,7 @@ function RankingAwardsPage() {
                 className="ml-[14px] flex h-[40px] w-[64px] items-center justify-center rounded-[8px] border border-[#c9d5e7] bg-white text-[13px] font-semibold text-[#2e569d]"
                 onClick={() => toSelectedPortfolioHash(portfolio.id)}
                 type="button"
+                title={rankLabel}
               >
                 상세
               </button>

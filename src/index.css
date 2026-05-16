@@ -21,6 +21,11 @@ body {
   margin: 0;
 }
 
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
 #root {
   min-height: 100vh;
 }
@@ -42,4 +47,32 @@ body {
 .animate-title-marquee {
   animation: title-marquee 7s ease-in-out infinite;
   min-width: max-content;
+}
+
+@keyframes dashboard-slide {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-dashboard-slide {
+  animation: dashboard-slide 420ms ease-out both;
+}
+
+@keyframes dashboard-progress {
+  0% {
+    transform: scaleX(0);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+.animate-dashboard-progress {
+  animation: dashboard-progress linear forwards;
 }

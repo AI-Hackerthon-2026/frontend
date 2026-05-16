@@ -1,16 +1,78 @@
 import { useCallback, useEffect, useState } from 'react'
-import { portfolioApi, type PortfolioListItem, type TopPortfolio } from '../../../services/api'
-import { formatSkills, splitSummary, toSelectedPortfolioHash } from '../../../services/portfolioMapper'
+import {
+  portfolioApi,
+  type PortfolioListItem,
+  type RankingPeriod,
+} from '../../../services/api'
+import {
+  formatSkills,
+  rankPortfolios,
+  splitSummary,
+  toSelectedPortfolioHash,
+} from '../../../services/portfolioMapper'
 import DashboardHeader from '../../../widgets/header/DashboardHeader'
+import PortfolioThumbnail from '../../../widgets/portfolio/PortfolioThumbnail'
 
 const imgHeaderLogoMark =
   'https://www.figma.com/api/mcp/asset/32ce995a-f29b-4ccb-b7d3-03a243641f94'
 
-const termOrder = ['CURRENT_SEMESTER', 'LAST_SEMESTER', 'ALL_TIME'] as const
+const termOrder = ['ALL_TIME', 'CURRENT_SEMESTER', 'LAST_SEMESTER'] as const
+const slideDurationMs = 4000
 const termLabels = {
-  ALL_TIME: '전체 1위 포트폴리오',
-  CURRENT_SEMESTER: '이번 학기 1위 포트폴리오',
-  LAST_SEMESTER: '저번 학기 1위 포트폴리오',
+  ALL_TIME: '전체',
+  CURRENT_SEMESTER: '이번 학기',
+  LAST_SEMESTER: '저번 학기',
+}
+const slideRankStyles = {
+  1: {
+    accent: 'bg-[#ffc32f]',
+    background: 'bg-[linear-gradient(115deg,#13224f_0%,#274a9d_48%,#f2b632_100%)]',
+    badge: 'bg-[#ffc32f] text-[#121a34]',
+    border: 'border-[#f3c548]',
+    cta: 'bg-[#e2842a] hover:bg-[#cf761f]',
+    label: 'text-[#ffe6a1]',
+    like: 'bg-[#2e569d]',
+    nav: 'bg-[#1f3472] hover:bg-[#172755]',
+    pattern: 'bg-[linear-gradient(135deg,rgba(255,255,255,0.13)_0_1px,transparent_1px_26px)]',
+    preview: 'bg-[#fff7df] text-[#9a641d]',
+    progress: 'bg-[#ffc32f]',
+    surface: 'bg-[rgba(255,255,255,0.96)]',
+  },
+  2: {
+    accent: 'bg-[#c7d6eb]',
+    background: 'bg-[linear-gradient(115deg,#182137_0%,#475d7a_50%,#dce6f2_100%)]',
+    badge: 'bg-[#edf4fd] text-[#2e569d]',
+    border: 'border-[#c7d6eb]',
+    cta: 'bg-[#506783] hover:bg-[#40536d]',
+    label: 'text-[#dce8f7]',
+    like: 'bg-[#40589e]',
+    nav: 'bg-[#34465f] hover:bg-[#28364a]',
+    pattern: 'bg-[linear-gradient(90deg,rgba(255,255,255,0.1)_0_1px,transparent_1px_30px)]',
+    preview: 'bg-[#eef4fb] text-[#40536d]',
+    progress: 'bg-[#dce6f2]',
+    surface: 'bg-[rgba(248,251,255,0.96)]',
+  },
+  3: {
+    accent: 'bg-[#e2842a]',
+    background: 'bg-[linear-gradient(115deg,#271c34_0%,#7a4a31_50%,#e2842a_100%)]',
+    badge: 'bg-[#fff1e3] text-[#b96624]',
+    border: 'border-[#e6a35f]',
+    cta: 'bg-[#b96624] hover:bg-[#97501b]',
+    label: 'text-[#ffd6ad]',
+    like: 'bg-[#b96624]',
+    nav: 'bg-[#693f31] hover:bg-[#553127]',
+    pattern: 'bg-[linear-gradient(135deg,rgba(255,246,237,0.12)_0_1px,transparent_1px_24px)]',
+    preview: 'bg-[#fff1e3] text-[#9a5520]',
+    progress: 'bg-[#e2842a]',
+    surface: 'bg-[rgba(255,250,245,0.96)]',
+  },
+} as const
+
+interface DashboardSlide extends PortfolioListItem {
+  period: RankingPeriod
+  periodLabel: string
+  rank: number
+  rankLabel: string
 }
 
 function MainDashboardPage() {
@@ -18,10 +80,13 @@ function MainDashboardPage() {
   const [popularPortfolios, setPopularPortfolios] = useState<PortfolioListItem[]>([])
   const [recentPortfolios, setRecentPortfolios] = useState<PortfolioListItem[]>([])
   const [slideIndex, setSlideIndex] = useState(0)
-  const [slides, setSlides] = useState<TopPortfolio[]>([])
-  const [term, setTerm] = useState<(typeof termOrder)[number]>('CURRENT_SEMESTER')
+  const [slides, setSlides] = useState<DashboardSlide[]>([])
+  const [term, setTerm] = useState<(typeof termOrder)[number]>('ALL_TIME')
 
   const currentSlide = slides[slideIndex]
+  const currentSlideStyle =
+    slideRankStyles[(currentSlide?.rank ?? 1) as keyof typeof slideRankStyles] ??
+    slideRankStyles[1]
   const [slideDescription, slideDescription2] = splitSummary(
     currentSlide?.summary ?? '등록된 1위 포트폴리오가 없습니다.',
   )
@@ -65,7 +130,7 @@ function MainDashboardPage() {
         updateTermBySlideIndex(newIndex)
         return newIndex
       })
-    }, 4000)
+    }, slideDurationMs)
 
     return () => {
       window.clearInterval(slideTimer)
@@ -78,20 +143,31 @@ function MainDashboardPage() {
 
       try {
         const [topData, popularData, recentData] = await Promise.all([
-          portfolioApi.getTop(),
+          Promise.all(
+            termOrder.map(async (period) => {
+              const rankings = await portfolioApi.getRanking(period)
+
+              return rankPortfolios(rankings)
+                .slice(0, 3)
+                .map(({ portfolio, rank, rankLabel }) => ({
+                  ...portfolio,
+                  period,
+                  periodLabel: termLabels[period],
+                  rank,
+                  rankLabel,
+                }))
+            }),
+          ),
           portfolioApi.getPopular(),
           portfolioApi.getList({ page: 0, size: 6, sort: 'LATEST' }),
         ])
-        const orderedSlides = [...topData].sort(
-          (first, second) =>
-            termOrder.indexOf(first.period) - termOrder.indexOf(second.period),
-        )
+        const orderedSlides = topData.flat()
 
         setSlides(orderedSlides)
         setPopularPortfolios(popularData)
         setRecentPortfolios(recentData.content)
         setSlideIndex(0)
-        setTerm(orderedSlides[0]?.period ?? 'CURRENT_SEMESTER')
+        setTerm(orderedSlides[0]?.period ?? 'ALL_TIME')
       } catch (error) {
         setErrorMessage(
           error instanceof Error
@@ -130,11 +206,34 @@ function MainDashboardPage() {
           </p>
         </div>
 
-        <section className="absolute left-[48px] top-[182px] h-[464px] w-[1184px] overflow-hidden rounded-[16px] border-2 border-[rgba(98,183,230,0.72)] bg-gradient-to-r from-[#121b42] via-[#253e86] via-[45%] to-[#2e569d] shadow-[0px_18px_30px_-18px_rgba(13,20,51,0.22)]">
-          <div className="absolute left-[602px] top-[31px] h-[260px] w-[460px] rounded-full bg-[rgba(128,246,255,0.13)]" />
-          <div className="absolute left-[332px] top-[92px] h-[220px] w-[360px] rounded-full bg-[rgba(255,195,47,0.12)]" />
+        <section
+          className={[
+            'absolute left-[48px] top-[182px] h-[464px] w-[1184px] overflow-hidden rounded-[16px] border-2 shadow-[0px_18px_30px_-18px_rgba(13,20,51,0.22)] transition-colors duration-500',
+            currentSlideStyle.background,
+            currentSlideStyle.border,
+          ].join(' ')}
+        >
+          <div
+            className={[
+              'absolute inset-0 opacity-70 transition-colors duration-500',
+              currentSlideStyle.pattern,
+            ].join(' ')}
+          />
+          <div className="absolute left-[612px] top-[34px] h-[360px] w-[2px] bg-white/20" />
+          <div className="absolute left-[637px] top-[34px] h-[360px] w-[2px] bg-white/10" />
 
           <div className="absolute left-[36px] top-[31px] flex gap-[12px]">
+            <button
+              onClick={() => handleTermChange('ALL_TIME')}
+              className={[
+                'px-[16px] py-[6px] rounded-[6px] text-[12px] font-semibold transition-all',
+                term === 'ALL_TIME'
+                  ? 'bg-white text-[#253e86]'
+                  : 'bg-[rgba(255,255,255,0.2)] text-white hover:bg-[rgba(255,255,255,0.3)]',
+              ].join(' ')}
+            >
+              전체
+            </button>
             <button
               onClick={() => handleTermChange('CURRENT_SEMESTER')}
               className={[
@@ -157,45 +256,72 @@ function MainDashboardPage() {
             >
               저번학기
             </button>
-            <button
-              onClick={() => handleTermChange('ALL_TIME')}
-              className={[
-                'px-[16px] py-[6px] rounded-[6px] text-[12px] font-semibold transition-all',
-                term === 'ALL_TIME'
-                  ? 'bg-white text-[#253e86]'
-                  : 'bg-[rgba(255,255,255,0.2)] text-white hover:bg-[rgba(255,255,255,0.3)]',
-              ].join(' ')}
-            >
-              전체
-            </button>
           </div>
 
-          <p className="absolute left-[36px] top-[112px] text-[22px] font-bold leading-[34px] text-[#62b7e6]">
-            {termLabels[term]}
+          <p
+            className={[
+              'absolute left-[36px] top-[112px] text-[22px] font-bold leading-[34px]',
+              currentSlideStyle.label,
+            ].join(' ')}
+          >
+            {currentSlide
+              ? `${currentSlide.periodLabel} ${currentSlide.rankLabel} 포트폴리오`
+              : `${termLabels[term]} 포트폴리오`}
           </p>
-          <h2 className="absolute left-[36px] top-[164px] text-[54px] font-bold leading-[74px] text-white">
+          <h2
+            className="absolute left-[36px] top-[164px] text-[54px] font-bold leading-[74px] text-white animate-dashboard-slide"
+            key={`title-${currentSlide?.id ?? 'empty'}-${slideIndex}`}
+          >
             {currentSlide?.projectName ?? '포트폴리오 준비 중'}
           </h2>
-          <div className="absolute left-[40px] top-[238px] h-[8px] w-[348px] rounded-[4px] bg-[#ffc32f]" />
-          <p className="absolute left-[40px] top-[270px] w-[560px] text-[18px] font-medium leading-[32px] text-white">
+          <div
+            className={[
+              'absolute left-[40px] top-[238px] h-[8px] w-[348px] rounded-[4px]',
+              currentSlideStyle.accent,
+            ].join(' ')}
+          />
+          <p
+            className="absolute left-[40px] top-[270px] w-[560px] text-[18px] font-medium leading-[32px] text-white animate-dashboard-slide"
+            key={`summary-${currentSlide?.id ?? 'empty'}-${slideIndex}`}
+          >
             {slideDescription}
             <br />
             {slideDescription2}
           </p>
           <button
-            className="absolute left-[40px] top-[370px] flex h-[42px] w-[172px] items-center justify-center rounded-[9px] bg-[#e2842a] text-[13px] font-semibold text-white"
+            className={[
+              'absolute left-[40px] top-[370px] flex h-[42px] w-[172px] items-center justify-center rounded-[9px] text-[13px] font-semibold text-white transition-colors',
+              currentSlideStyle.cta,
+            ].join(' ')}
             onClick={() => currentSlide && toSelectedPortfolioHash(currentSlide.id)}
             type="button"
           >
             포트폴리오 상세 보기
           </button>
 
-          <div className="absolute left-[655px] top-[58px] h-[318px] w-[360px] rounded-[22px] bg-[rgba(255,255,255,0.96)] shadow-[0px_24px_36px_-18px_rgba(5,10,31,0.3)]">
-            <div className="absolute left-[28px] top-[28px] flex h-[138px] w-[304px] items-center justify-center rounded-[16px] border border-[#c9d5e7] bg-[#e7f0fa] text-[15px] font-bold text-[#2e569d]">
-              PROJECT PREVIEW
-            </div>
-            <div className="absolute -left-[8px] -top-[8px] flex size-[58px] items-center justify-center rounded-full border border-white bg-[#ffc32f] text-[25px] font-bold text-[#121a34]">
-              ♛
+          <div
+            className={[
+              'absolute left-[655px] top-[58px] h-[318px] w-[360px] rounded-[22px] shadow-[0px_24px_36px_-18px_rgba(5,10,31,0.3)] animate-dashboard-slide',
+              currentSlideStyle.surface,
+            ].join(' ')}
+            key={`card-${currentSlide?.id ?? 'empty'}-${slideIndex}`}
+          >
+            <PortfolioThumbnail
+              alt={`${currentSlide?.projectName ?? '포트폴리오'} 대표 이미지`}
+              className={[
+                'absolute left-[28px] top-[28px] flex h-[138px] w-[304px] items-center justify-center overflow-hidden rounded-[16px] border border-white/80 text-[15px] font-bold',
+                currentSlideStyle.preview,
+              ].join(' ')}
+              fallback="PROJECT PREVIEW"
+              src={currentSlide?.thumbnailUrl}
+            />
+            <div
+              className={[
+                'absolute -left-[8px] -top-[8px] flex size-[58px] items-center justify-center rounded-full border border-white text-[13px] font-bold',
+                currentSlideStyle.badge,
+              ].join(' ')}
+            >
+              {currentSlide?.rankLabel ?? 'TOP'}
             </div>
             <p className="absolute left-[28px] top-[204px] text-[20px] font-bold leading-[28px] text-[#121a34]">
               {currentSlide?.projectName ?? '데이터 없음'}
@@ -205,7 +331,12 @@ function MainDashboardPage() {
                 ? `${currentSlide.authorName} · ${formatSkills(currentSlide.skills)}`
                 : 'API 데이터를 기다리는 중입니다.'}
             </p>
-            <div className="absolute left-[28px] top-[269px] flex h-[34px] w-[92px] items-center justify-center rounded-[17px] bg-[#2e569d] text-[14px] font-bold text-white">
+            <div
+              className={[
+                'absolute left-[28px] top-[269px] flex h-[34px] w-[92px] items-center justify-center rounded-[17px] text-[14px] font-bold text-white',
+                currentSlideStyle.like,
+              ].join(' ')}
+            >
               ♥ {currentSlide?.likeCount ?? 0}
             </div>
           </div>
@@ -217,13 +348,19 @@ function MainDashboardPage() {
             <div className="flex">
               <button
                 onClick={handlePrevSlide}
-                className="h-[42px] w-[56px] bg-[#253e86] text-white flex items-center justify-center hover:bg-[#1a2a5a] transition-colors leading-none"
+                className={[
+                  'h-[42px] w-[56px] text-white flex items-center justify-center transition-colors leading-none',
+                  currentSlideStyle.nav,
+                ].join(' ')}
               >
                 <span className="text-[28px] font-bold">‹</span>
               </button>
               <button
                 onClick={handleNextSlide}
-                className="h-[42px] w-[56px] bg-[#253e86] text-white flex items-center justify-center hover:bg-[#1a2a5a] transition-colors leading-none"
+                className={[
+                  'h-[42px] w-[56px] text-white flex items-center justify-center transition-colors leading-none',
+                  currentSlideStyle.nav,
+                ].join(' ')}
               >
                 <span className="text-[28px] font-bold">›</span>
               </button>
@@ -231,12 +368,15 @@ function MainDashboardPage() {
           </div>
           <div className="absolute left-[40px] top-[340px] h-[5px] w-[420px] rounded-[3px] bg-[rgba(255,255,255,0.24)]">
             <div
-              className="h-[5px] rounded-[3px] bg-[#62b7e6] transition-all"
+              className={[
+                'h-[5px] origin-left rounded-[3px]',
+                slides.length > 1 ? 'animate-dashboard-progress' : '',
+                currentSlideStyle.progress,
+              ].join(' ')}
+              key={`progress-${currentSlide?.id ?? 'empty'}-${slideIndex}`}
               style={{
-                width:
-                  slides.length > 0
-                    ? `${((slideIndex + 1) / slides.length) * 100}%`
-                    : '0%',
+                animationDuration: `${slideDurationMs}ms`,
+                transform: slides.length > 0 ? undefined : 'scaleX(0)',
               }}
             />
           </div>
@@ -256,9 +396,12 @@ function MainDashboardPage() {
               key={portfolio.id}
               onClick={() => toSelectedPortfolioHash(portfolio.id)}
             >
-              <div className="flex h-[108px] items-center justify-center rounded-[10px] bg-[#e7f0fa] text-[13px] font-medium text-[#5c6a84]">
-                프로젝트 썸네일
-              </div>
+              <PortfolioThumbnail
+                alt={`${portfolio.projectName} 대표 이미지`}
+                className="flex h-[108px] items-center justify-center overflow-hidden rounded-[10px] bg-[#e7f0fa] text-[13px] font-medium text-[#5c6a84]"
+                fallback="프로젝트 썸네일"
+                src={portfolio.thumbnailUrl}
+              />
               <h3 className="mt-[15px] text-[17px] font-semibold text-[#121a34]">
                 {portfolio.projectName}
               </h3>
